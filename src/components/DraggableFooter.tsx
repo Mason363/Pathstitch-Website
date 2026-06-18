@@ -12,146 +12,143 @@ interface DraggableFooterProps {
   onBackgroundMouseMove: (point: Point) => void;
 }
 
+interface LetterState {
+  char: string;
+  x: number;
+  y: number;
+  hasDragged: boolean;
+}
+
 export default function DraggableFooter({
   onBackgroundClick,
   onBackgroundMouseMove,
 }: DraggableFooterProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [isMounted, setIsMounted] = useState(false);
-  const fabricRef = useRef<any>(null);
+  const [lettersData, setLettersData] = useState<LetterState[]>([]);
+  const dragInfo = useRef<{
+    index: number;
+    startX: number;
+    startY: number;
+    startLeft: number;
+    startTop: number;
+  } | null>(null);
 
+  // Initialize and reposition letters on mount and resize
   useEffect(() => {
-    setIsMounted(true);
+    const handleResize = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const letterSpacing = 145; // Clean spacing between letters
+      const letters = ["P", "a", "t", "h", "s", "t", "i", "t", "c", "h"];
+      const wordWidth = (letters.length - 1) * letterSpacing;
+      const startX = (w - wordWidth) / 2;
+      
+      // Position startY so that the 200px tall letters sit exactly at the very bottom of the viewport
+      const startY = h - 200; 
+
+      setLettersData((prev) => {
+        return letters.map((char, index) => {
+          const existing = prev[index];
+          // If the user has already dragged this letter, preserve its custom position
+          if (existing && existing.hasDragged) {
+            return existing;
+          }
+          return {
+            char,
+            x: startX + index * letterSpacing,
+            y: startY,
+            hasDragged: false,
+          };
+        });
+      });
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // Handle letter dragging via window mousemove/mouseup
   useEffect(() => {
-    if (!isMounted || !canvasRef.current || !containerRef.current) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!dragInfo.current) return;
+      const { index, startX, startY, startLeft, startTop } = dragInfo.current;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
 
-    let isComponentActive = true;
-    let canvasInstance: any = null;
-
-    // Dynamically import fabric to prevent SSR window reference error
-    import("fabric").then(({ Canvas, FabricText }) => {
-      if (!isComponentActive || !canvasRef.current) return;
-
-      // Prevent duplicate canvas initialization on the same element
-      if (fabricRef.current) return;
-
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-
-      // Initialize fabric canvas spanning the full screen
-      const canvas = new Canvas(canvasRef.current!, {
-        width: width,
-        height: height,
-        backgroundColor: "transparent",
-        selection: true, // Enable selection to ensure dragging works
-        selectionColor: "transparent", // Hide group selection marquee box
-        selectionBorderColor: "transparent",
-        selectionLineWidth: 0,
-        hoverCursor: "move",
+      setLettersData((prev) => {
+        const next = [...prev];
+        next[index] = {
+          ...next[index],
+          x: startLeft + dx,
+          y: startTop + dy,
+          hasDragged: true,
+        };
+        return next;
       });
-
-      canvasInstance = canvas;
-      fabricRef.current = canvas;
-
-      const letters = ["P", "a", "t", "h", "s", "t", "i", "t", "c", "h"];
-      const fontSize = 200; // Extra large letters
-      const letterSpacing = 150; // Spacing for 200px font size
-      const wordWidth = (letters.length - 1) * letterSpacing;
-      const textObjects: any[] = [];
-
-      // Helper function to position letters correctly on load and resize
-      const repositionLetters = (w: number, h: number) => {
-        const startX = (w - wordWidth) / 2;
-        // Align letters to the very bottom of the viewport (fontSize * 0.85 aligns the baseline to the bottom edge)
-        const startY = h - (fontSize * 0.85); 
-        
-        textObjects.forEach((textObj, index) => {
-          textObj.set({
-            left: startX + index * letterSpacing,
-            top: startY,
-          });
-          textObj.setCoords();
-        });
-      };
-
-      // Wait for fonts to be ready before adding text, ensuring correct metrics and rendering
-      document.fonts.ready.then(() => {
-        if (!isComponentActive || !fabricRef.current) return;
-
-        letters.forEach((char, index) => {
-          const textObj = new FabricText(char, {
-            left: 0,
-            top: 0,
-            fontFamily: "Montserrat",
-            fontSize: fontSize,
-            fontWeight: "900", // Montserrat Black
-            fill: "#ffffff",
-            stroke: "rgba(255, 255, 255, 0.15)",
-            strokeWidth: 0.5,
-            hasControls: false, // Remove scaling/rotating handles
-            hasBorders: false, // Remove selection box border
-            lockScalingX: true,
-            lockScalingY: true,
-            lockRotation: true,
-            selectable: true, // Explicitly enable selection for dragging
-            evented: true,    // Explicitly enable event handling
-            padding: 0,
-          });
-
-          // Upright starting position (no rotation)
-          textObj.rotate(0);
-
-          canvas.add(textObj);
-          textObjects.push(textObj);
-        });
-
-        // Initial layout positioning
-        repositionLetters(window.innerWidth, window.innerHeight);
-        canvas.renderAll();
-      });
-
-      // Handle background clicks for drawing measurements
-      canvas.on("mouse:down", (options) => {
-        if (!options.target) {
-          const pointer = options.scenePoint || (canvas as any).getScenePoint(options.e);
-          onBackgroundClick({ x: pointer.x, y: pointer.y });
-        }
-      });
-
-      // Handle background mouse move for live measurement preview
-      canvas.on("mouse:move", (options) => {
-        const pointer = options.scenePoint || (canvas as any).getScenePoint(options.e);
-        onBackgroundMouseMove({ x: pointer.x, y: pointer.y });
-      });
-
-      // Handle window resizing
-      const handleResize = () => {
-        if (!fabricRef.current) return;
-        const newWidth = window.innerWidth;
-        const newHeight = window.innerHeight;
-        fabricRef.current.setDimensions({ width: newWidth, height: newHeight });
-        repositionLetters(newWidth, newHeight);
-        fabricRef.current.renderAll();
-      };
-
-      window.addEventListener("resize", handleResize);
-    });
-
-    return () => {
-      isComponentActive = false;
-      if (canvasInstance) {
-        canvasInstance.dispose();
-        fabricRef.current = null;
-      }
     };
-  }, [isMounted, onBackgroundClick, onBackgroundMouseMove]);
+
+    const handleMouseUp = () => {
+      dragInfo.current = null;
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, []);
+
+  const handleMouseDown = (index: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const letter = lettersData[index];
+    dragInfo.current = {
+      index,
+      startX: e.clientX,
+      startY: e.clientY,
+      startLeft: letter.x,
+      startTop: letter.y,
+    };
+  };
 
   return (
-    <div style={styles.footerContainer} ref={containerRef}>
-      <canvas ref={canvasRef} />
+    <div style={styles.footerContainer}>
+      {/* Background click overlay for drafting CAD measurements */}
+      <div
+        style={styles.measurementOverlay}
+        onMouseDown={(e) => {
+          onBackgroundClick({ x: e.clientX, y: e.clientY });
+        }}
+        onMouseMove={(e) => {
+          onBackgroundMouseMove({ x: e.clientX, y: e.clientY });
+        }}
+      />
+
+      {/* Pure HTML/CSS Draggable Letters */}
+      {lettersData.map((item, index) => (
+        <div
+          key={index}
+          onMouseDown={(e) => handleMouseDown(index, e)}
+          style={{
+            position: "absolute",
+            left: `${item.x}px`,
+            top: `${item.y}px`,
+            fontFamily: "var(--font-montserrat), 'Montserrat', sans-serif",
+            fontSize: "200px",
+            fontWeight: 900, // Montserrat Black
+            color: "#ffffff",
+            userSelect: "none",
+            cursor: "move",
+            lineHeight: "0.8", // Aligns characters to the bottom boundary cleanly
+            WebkitTextStroke: "0.5px rgba(255, 255, 255, 0.15)",
+            zIndex: 20,
+            touchAction: "none",
+          }}
+        >
+          {item.char}
+        </div>
+      ))}
     </div>
   );
 }
@@ -166,5 +163,14 @@ const styles: Record<string, React.CSSProperties> = {
     zIndex: 5,
     overflow: "hidden",
     pointerEvents: "auto",
+  },
+  measurementOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    zIndex: 1,
+    cursor: "crosshair",
   },
 };
