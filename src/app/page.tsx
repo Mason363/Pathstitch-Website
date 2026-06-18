@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import Header from "@/components/Header";
 import ImageViewer from "@/components/ImageViewer";
@@ -18,6 +18,21 @@ interface MeasurementLine {
   length: number;
 }
 
+// Signed Distance Field (SDF) of a rounded rectangle centered at (0, 0)
+function sdRoundedRect(x: number, y: number, w: number, h: number, r: number): number {
+  const halfW = w / 2;
+  const halfH = h / 2;
+  const dx = Math.abs(x) - halfW + r;
+  const dy = Math.abs(y) - halfH + r;
+  
+  const mx = Math.max(dx, 0);
+  const my = Math.max(dy, 0);
+  const outerDist = Math.sqrt(mx * mx + my * my) - r;
+  
+  const innerDist = Math.min(Math.max(dx, dy), 0);
+  return outerDist + innerDist;
+}
+
 // Import DraggableFooter with ssr: false to prevent hydration/SSR window issues
 const DraggableFooter = dynamic(() => import("@/components/DraggableFooter"), {
   ssr: false,
@@ -28,9 +43,12 @@ export default function Home() {
   const [draftStart, setDraftStart] = useState<Point | null>(null);
   const [mousePos, setMousePos] = useState<Point>({ x: 0, y: 0 });
   const [isImageSelected, setIsImageSelected] = useState(false);
+  const [radius, setRadius] = useState(40); // Lifted corner radius state
+  
+  const glowCanvasRef = useRef<HTMLCanvasElement>(null);
 
   // De-select the image when clicking outside of it (but ignore the background overlay)
-  React.useEffect(() => {
+  useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
       const imgContainer = document.getElementById("image-container");
       if (imgContainer && !imgContainer.contains(e.target as Node)) {
@@ -45,6 +63,101 @@ export default function Home() {
     window.addEventListener("mousedown", handleOutsideClick);
     return () => window.removeEventListener("mousedown", handleOutsideClick);
   }, []);
+
+  // Render the dithered white ASCII dot glow on the full-screen canvas
+  useEffect(() => {
+    const canvas = glowCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const handleResize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      
+      ctx.resetTransform();
+      ctx.scale(dpr, dpr);
+      
+      drawGlow(w, h);
+    };
+
+    const drawGlow = (w: number, h: number) => {
+      ctx.clearRect(0, 0, w, h);
+
+      const W = 720;
+      const H = 480;
+      const R = Math.max(0, Math.min(radius, H / 2));
+      const gridSize = 6; // Tight grid spacing for dense dots
+
+      ctx.font = "bold 8px monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "rgba(255, 255, 255, 0.14)"; // Dim white glow dither
+
+      // Center of the main image is centered horizontally (0.5w) and positioned at 0.4h
+      const centerX = w * 0.5;
+      const centerY = h * 0.4;
+
+      // Scan local bounding box to optimize performance: only draw dither where it has opacity (d < 150px)
+      const halfBoxW = W / 2 + 150;
+      const halfBoxH = H / 2 + 150;
+
+      const colStart = Math.max(0, Math.floor((centerX - halfBoxW) / gridSize));
+      const colEnd = Math.min(Math.ceil(w / gridSize), Math.ceil((centerX + halfBoxW) / gridSize));
+      const rowStart = Math.max(0, Math.floor((centerY - halfBoxH) / gridSize));
+      const rowEnd = Math.min(Math.ceil(h / gridSize), Math.ceil((centerY + halfBoxH) / gridSize));
+
+      for (let r = rowStart; r < rowEnd; r++) {
+        for (let c = colStart; c < colEnd; c++) {
+          // Grid coordinate in viewport pixels
+          const px = c * gridSize + gridSize / 2;
+          const py = r * gridSize + gridSize / 2;
+
+          // Position relative to the center of the image
+          const rx = px - centerX;
+          const ry = py - centerY;
+
+          // Signed distance to the image rounded rectangle
+          const d = sdRoundedRect(rx, ry, W, H, R);
+
+          let density = 0;
+          if (d <= 0) {
+            // Decays slowly inside the image bounds
+            density = Math.exp(-(d * d) / 900);
+          } else {
+            // Decays outside the image (2500 makes the dither gradient extend beautifully behind the buttons)
+            density = Math.exp(-(d * d) / 2500);
+          }
+
+          // Apply dither noise for high-fidelity retro grain
+          const dither = density + (Math.random() - 0.5) * 0.22;
+
+          let char = "";
+          if (dither > 0.75) {
+            char = "●";
+          } else if (dither > 0.45) {
+            char = "•";
+          } else if (dither > 0.20) {
+            char = "·";
+          } else if (dither > 0.05) {
+            char = ".";
+          }
+
+          if (char) {
+            ctx.fillText(char, px, py);
+          }
+        }
+      }
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [radius]);
 
   const handleBackgroundClick = (pt: Point) => {
     if (isImageSelected) {
@@ -87,6 +200,12 @@ export default function Home() {
         mousePos={mousePos} 
       />
 
+      {/* Infinite ASCII Dot Glow Canvas (Z-index 2, covers full viewport behind image and buttons) */}
+      <canvas
+        ref={glowCanvasRef}
+        style={styles.glowCanvas}
+      />
+
       {/* Header Overlay (Z-index 100, top-left) */}
       <Header />
 
@@ -94,7 +213,12 @@ export default function Home() {
       <div style={styles.contentLayout}>
         <div style={styles.imageWrapper}>
           {/* Centered Image Viewer (Stitches Animation around Single Screenshot) */}
-          <ImageViewer isSelected={isImageSelected} setIsSelected={setIsImageSelected} />
+          <ImageViewer 
+            isSelected={isImageSelected} 
+            setIsSelected={setIsImageSelected}
+            radius={radius}
+            setRadius={setRadius}
+          />
           
           {/* Action Panel / Download Buttons (placed absolutely below the image container) */}
           <div style={styles.actionPanel}>
@@ -199,5 +323,14 @@ const styles: Record<string, React.CSSProperties> = {
     transition: "background-color 0.15s, border-color 0.15s, transform 0.1s",
     textDecoration: "none",
     whiteSpace: "nowrap",
+  },
+  glowCanvas: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: "100vw",
+    height: "100vh",
+    zIndex: 2,
+    pointerEvents: "none",
   },
 };
