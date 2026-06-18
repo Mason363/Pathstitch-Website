@@ -6,6 +6,7 @@ const IMAGE_SRC = "/main-image.png";
 const WIDTH = 720;
 const HEIGHT = 480;
 const OFFSET = 12; // Outward offset in pixels for the sewing/dashed animation ring
+const GLOW_OFFSET = 60; // Offset for the ASCII glow canvas bounding box
 
 interface Point {
   x: number;
@@ -17,12 +18,28 @@ interface ImageViewerProps {
   setIsSelected: (selected: boolean) => void;
 }
 
+// Signed Distance Field (SDF) of a rounded rectangle centered at (0, 0)
+function sdRoundedRect(x: number, y: number, w: number, h: number, r: number): number {
+  const halfW = w / 2;
+  const halfH = h / 2;
+  const dx = Math.abs(x) - halfW + r;
+  const dy = Math.abs(y) - halfH + r;
+  
+  const mx = Math.max(dx, 0);
+  const my = Math.max(dy, 0);
+  const outerDist = Math.sqrt(mx * mx + my * my) - r;
+  
+  const innerDist = Math.min(Math.max(dx, dy), 0);
+  return outerDist + innerDist;
+}
+
 export default function ImageViewer({ isSelected, setIsSelected }: ImageViewerProps) {
   const [radius, setRadius] = useState(40); // User-adjustable corner radius
   const [isDragging, setIsDragging] = useState(false);
   const [animationProgress, setAnimationProgress] = useState(0); // 0 to 90000 ms (1m 30s)
   
   const containerRef = useRef<HTMLDivElement>(null);
+  const glowCanvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number>(0);
 
@@ -198,6 +215,82 @@ export default function ImageViewer({ isSelected, setIsSelected }: ImageViewerPr
     Z
   `.trim().replace(/\s+/g, " ");
 
+  // Render the dithered ASCII dot glow behind the image
+  useEffect(() => {
+    const canvas = glowCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const width = WIDTH + 2 * GLOW_OFFSET;
+    const height = HEIGHT + 2 * GLOW_OFFSET;
+
+    // Handle high-DPI scaling
+    if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+    }
+
+    ctx.resetTransform();
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, width, height);
+
+    const R_curr = Math.max(0, Math.min(radius, HEIGHT / 2));
+    const gridSize = 6; // Tight grid spacing for dense dots
+
+    ctx.font = "bold 8px monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "rgba(255, 159, 10, 0.35)"; // Accent orange theme
+
+    const cols = Math.ceil(width / gridSize);
+    const rows = Math.ceil(height / gridSize);
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        // Grid cell coordinate in pixels
+        const px = c * gridSize + gridSize / 2;
+        const py = r * gridSize + gridSize / 2;
+
+        // Position relative to the center of the image
+        const rx = px - width / 2;
+        const ry = py - height / 2;
+
+        // Signed distance to the image shape
+        const d = sdRoundedRect(rx, ry, WIDTH, HEIGHT, R_curr);
+
+        let density = 0;
+        if (d <= 0) {
+          // Inside the image: decays slowly towards center to create a clean halo effect
+          density = Math.exp(-(d * d) / 144);
+        } else {
+          // Outside the image: decays as we move away from the border
+          density = Math.exp(-(d * d) / 576);
+        }
+
+        // Apply noise dithering to achieve a retro-dithered grain look
+        const dither = density + (Math.random() - 0.5) * 0.22;
+
+        // Map intensity to a ramp of round circular dot glyphs
+        let char = "";
+        if (dither > 0.75) {
+          char = "●"; // Large dot
+        } else if (dither > 0.45) {
+          char = "•"; // Medium dot
+        } else if (dither > 0.20) {
+          char = "·"; // Small dot
+        } else if (dither > 0.05) {
+          char = "."; // Tiny dot
+        }
+
+        if (char) {
+          ctx.fillText(char, px, py);
+        }
+      }
+    }
+  }, [radius]);
+
   // Handle fillet corner dragging
   const handleMouseDown = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -243,6 +336,20 @@ export default function ImageViewer({ isSelected, setIsSelected }: ImageViewerPr
           setIsSelected(true);
         }}
       >
+        {/* ASCII Dot Glow Canvas (placed behind the image) */}
+        <canvas
+          ref={glowCanvasRef}
+          style={{
+            position: "absolute",
+            top: -GLOW_OFFSET,
+            left: -GLOW_OFFSET,
+            width: WIDTH + 2 * GLOW_OFFSET,
+            height: HEIGHT + 2 * GLOW_OFFSET,
+            zIndex: -1,
+            pointerEvents: "none",
+          }}
+        />
+
         {/* Core Image Display */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
