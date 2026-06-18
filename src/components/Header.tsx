@@ -37,7 +37,6 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "12px",
   },
   logoInnerContainer: {
-    border: "1px solid var(--color-accent-blue)",
     borderRadius: "6px",
     padding: "3px",
     display: "flex",
