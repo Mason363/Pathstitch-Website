@@ -27,8 +27,32 @@ export default function Home() {
   const [lines, setLines] = useState<MeasurementLine[]>([]);
   const [draftStart, setDraftStart] = useState<Point | null>(null);
   const [mousePos, setMousePos] = useState<Point>({ x: 0, y: 0 });
+  const [isImageSelected, setIsImageSelected] = useState(false);
+
+  // De-select the image when clicking outside of it (but ignore the background overlay)
+  React.useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      const imgContainer = document.getElementById("image-container");
+      if (imgContainer && !imgContainer.contains(e.target as Node)) {
+        const target = e.target as HTMLElement;
+        const isOverlay = target.id === "measurement-overlay";
+        // If it's not the measurement overlay, we de-select the image here
+        if (!isOverlay) {
+          setIsImageSelected(false);
+        }
+      }
+    };
+    window.addEventListener("mousedown", handleOutsideClick);
+    return () => window.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
 
   const handleBackgroundClick = (pt: Point) => {
+    if (isImageSelected) {
+      // Click on the background overlay while selected simply de-selects the image and does not start a measurement
+      setIsImageSelected(false);
+      return;
+    }
+
     if (!draftStart) {
       setDraftStart(pt);
       setMousePos(pt);
@@ -70,7 +94,7 @@ export default function Home() {
       <div style={styles.contentLayout}>
         <div style={styles.imageWrapper}>
           {/* Centered Image Viewer (Stitches Animation around Single Screenshot) */}
-          <ImageViewer />
+          <ImageViewer isSelected={isImageSelected} setIsSelected={setIsImageSelected} />
           
           {/* Action Panel / Download Buttons (placed absolutely below the image container) */}
           <div style={styles.actionPanel}>
