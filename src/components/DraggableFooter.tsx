@@ -39,11 +39,13 @@ export default function DraggableFooter({
       const h = window.innerHeight;
       const letterSpacing = 145; // Clean spacing between letters
       const letters = ["P", "a", "t", "h", "s", "t", "i", "t", "c", "h"];
-      const wordWidth = (letters.length - 1) * letterSpacing;
-      const startX = (w - wordWidth) / 2;
+      // Center word box: total width is letters.length * letterSpacing
+      const totalWordWidth = letters.length * letterSpacing;
+      const startX = (w - totalWordWidth) / 2;
       
-      // Position startY so that the 200px tall letters sit exactly at the very bottom of the viewport
-      const startY = h - 200; 
+      // Position startY so that the bottom of the letters touches the bottom of the viewport
+      // With fontSize=200px and lineHeight=0.8, startY = h - 150 ensures the letters sit exactly on the bottom edge
+      const startY = h - 150; 
 
       setLettersData((prev) => {
         return letters.map((char, index) => {
@@ -134,6 +136,8 @@ export default function DraggableFooter({
             position: "absolute",
             left: `${item.x}px`,
             top: `${item.y}px`,
+            width: "145px", // Match letterSpacing for horizontal centering
+            textAlign: "center", // Center align each letter inside its slot
             fontFamily: "var(--font-montserrat), 'Montserrat', sans-serif",
             fontSize: "200px",
             fontWeight: 900, // Montserrat Black
