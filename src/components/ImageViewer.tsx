@@ -5,14 +5,19 @@ import React, { useState, useEffect, useRef } from "react";
 const IMAGE_SRC = "/main-image.png";
 const WIDTH = 720;
 const HEIGHT = 480;
+const OFFSET = 12; // Outward offset in pixels for the sewing/dashed animation ring
 
 interface Point {
   x: number;
   y: number;
 }
 
-export default function ImageViewer() {
-  const [isSelected, setIsSelected] = useState(false);
+interface ImageViewerProps {
+  isSelected: boolean;
+  setIsSelected: (selected: boolean) => void;
+}
+
+export default function ImageViewer({ isSelected, setIsSelected }: ImageViewerProps) {
   const [radius, setRadius] = useState(40); // User-adjustable corner radius
   const [isDragging, setIsDragging] = useState(false);
   const [animationProgress, setAnimationProgress] = useState(0); // 0 to 90000 ms (1m 30s)
@@ -20,17 +25,6 @@ export default function ImageViewer() {
   const containerRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number>(0);
-
-  // De-select when clicking outside the image container
-  useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsSelected(false);
-      }
-    };
-    window.addEventListener("mousedown", handleOutsideClick);
-    return () => window.removeEventListener("mousedown", handleOutsideClick);
-  }, []);
 
   // Handle animation loop (90s total duration)
   useEffect(() => {
@@ -59,23 +53,24 @@ export default function ImageViewer() {
     };
   }, []);
 
-  // Compute points along the filleted rectangle perimeter
+  // Compute points along the offset filleted rectangle perimeter for the animation ring
   const getPoints = (): { points: Point[]; perimeter: number } => {
     const R = Math.max(0, Math.min(radius, HEIGHT / 2));
-    const W = WIDTH;
-    const H = HEIGHT;
+    const R_ring = R + OFFSET;
+    const W = WIDTH + 2 * OFFSET;
+    const H = HEIGHT + 2 * OFFSET;
 
     // Segment lengths
-    const L_top = W - 2 * R;
-    const L_tr = R * (Math.PI / 2);
-    const L_right = H - 2 * R;
-    const L_br = R * (Math.PI / 2);
-    const L_bottom = W - 2 * R;
-    const L_bl = R * (Math.PI / 2);
-    const L_left = H - 2 * R;
-    const L_tl = R * (Math.PI / 2);
+    const L_top = W - 2 * R_ring;
+    const L_tr = R_ring * (Math.PI / 2);
+    const L_right = H - 2 * R_ring;
+    const L_br = R_ring * (Math.PI / 2);
+    const L_bottom = W - 2 * R_ring;
+    const L_bl = R_ring * (Math.PI / 2);
+    const L_left = H - 2 * R_ring;
+    const L_tl = R_ring * (Math.PI / 2);
 
-    const perimeter = 2 * (W - 2 * R) + 2 * (H - 2 * R) + 2 * Math.PI * R;
+    const perimeter = 2 * (W - 2 * R_ring) + 2 * (H - 2 * R_ring) + 2 * Math.PI * R_ring;
     
     // Spacing of sewing holes (approx. 50px apart for wider spacing)
     const idealSpacing = 50;
@@ -89,50 +84,50 @@ export default function ImageViewer() {
 
       if (d < L_top) {
         // Top line
-        points.push({ x: R + d, y: 0 });
+        points.push({ x: R_ring + d, y: 0 });
       } else if (d < L_top + L_tr) {
         // Top-Right corner
         const s = d - L_top;
-        const theta = -Math.PI / 2 + s / R;
+        const theta = -Math.PI / 2 + s / R_ring;
         points.push({
-          x: W - R + R * Math.cos(theta),
-          y: R + R * Math.sin(theta),
+          x: W - R_ring + R_ring * Math.cos(theta),
+          y: R_ring + R_ring * Math.sin(theta),
         });
       } else if (d < L_top + L_tr + L_right) {
         // Right line
         const s = d - L_top - L_tr;
-        points.push({ x: W, y: R + s });
+        points.push({ x: W, y: R_ring + s });
       } else if (d < L_top + L_tr + L_right + L_br) {
         // Bottom-Right corner
         const s = d - L_top - L_tr - L_right;
-        const theta = s / R;
+        const theta = s / R_ring;
         points.push({
-          x: W - R + R * Math.cos(theta),
-          y: H - R + R * Math.sin(theta),
+          x: W - R_ring + R_ring * Math.cos(theta),
+          y: H - R_ring + R_ring * Math.sin(theta),
         });
       } else if (d < L_top + L_tr + L_right + L_br + L_bottom) {
         // Bottom line
         const s = d - L_top - L_tr - L_right - L_br;
-        points.push({ x: W - R - s, y: H });
+        points.push({ x: W - R_ring - s, y: H });
       } else if (d < L_top + L_tr + L_right + L_br + L_bottom + L_bl) {
         // Bottom-Left corner
         const s = d - L_top - L_tr - L_right - L_br - L_bottom;
-        const theta = Math.PI / 2 + s / R;
+        const theta = Math.PI / 2 + s / R_ring;
         points.push({
-          x: R + R * Math.cos(theta),
-          y: H - R + R * Math.sin(theta),
+          x: R_ring + R_ring * Math.cos(theta),
+          y: H - R_ring + R_ring * Math.sin(theta),
         });
       } else if (d < L_top + L_tr + L_right + L_br + L_bottom + L_bl + L_left) {
         // Left line
         const s = d - L_top - L_tr - L_right - L_br - L_bottom - L_bl;
-        points.push({ x: 0, y: H - R - s });
+        points.push({ x: 0, y: H - R_ring - s });
       } else {
         // Top-Left corner
         const s = d - L_top - L_tr - L_right - L_br - L_bottom - L_bl - L_left;
-        const theta = Math.PI + s / R;
+        const theta = Math.PI + s / R_ring;
         points.push({
-          x: R + R * Math.cos(theta),
-          y: R + R * Math.sin(theta),
+          x: R_ring + R_ring * Math.cos(theta),
+          y: R_ring + R_ring * Math.sin(theta),
         });
       }
     }
@@ -170,9 +165,27 @@ export default function ImageViewer() {
 
   const anim = getAnimationState();
 
-  // Bounding box path matching the filleted rect
+  // Bounding box path matching the offset filleted rect for the animation
   const R = Math.max(0, Math.min(radius, HEIGHT / 2));
+  const R_ring = R + OFFSET;
+  const W_ring = WIDTH + 2 * OFFSET;
+  const H_ring = HEIGHT + 2 * OFFSET;
+
   const pathData = `
+    M ${R_ring} 0
+    H ${W_ring - R_ring}
+    A ${R_ring} ${R_ring} 0 0 1 ${W_ring} ${R_ring}
+    V ${H_ring - R_ring}
+    A ${R_ring} ${R_ring} 0 0 1 ${W_ring - R_ring} ${H_ring}
+    H ${R_ring}
+    A ${R_ring} ${R_ring} 0 0 1 0 ${H_ring - R_ring}
+    V ${R_ring}
+    A ${R_ring} ${R_ring} 0 0 1 ${R_ring} 0
+    Z
+  `.trim().replace(/\s+/g, " ");
+
+  // Path data for the selection highlight (aligned exactly with the image borders)
+  const pathDataImage = `
     M ${R} 0
     H ${WIDTH - R}
     A ${R} ${R} 0 0 1 ${WIDTH} ${R}
@@ -222,6 +235,7 @@ export default function ImageViewer() {
   return (
     <div style={styles.outerContainer}>
       <div 
+        id="image-container"
         ref={containerRef}
         style={styles.imageContainer}
         onClick={(e) => {
@@ -241,14 +255,25 @@ export default function ImageViewer() {
           draggable={false}
         />
 
-        {/* Vector SVG Animation Overlay */}
-        <svg style={styles.svgOverlay} width={WIDTH} height={HEIGHT}>
-          {/* CAD selection highlight (Only when selected) */}
+        {/* Vector SVG Animation Overlay (shifted outward by offset to frame the image) */}
+        <svg 
+          style={{
+            ...styles.svgOverlay,
+            top: -OFFSET,
+            left: -OFFSET,
+            width: WIDTH + 2 * OFFSET,
+            height: HEIGHT + 2 * OFFSET,
+          }} 
+          width={WIDTH + 2 * OFFSET} 
+          height={HEIGHT + 2 * OFFSET}
+        >
+          {/* CAD selection highlight (Only when selected, aligned with the image boundary) */}
           {isSelected && (
             <>
-              {/* Blue outline tracing the exact filleted shape */}
+              {/* Blue outline tracing the exact filleted shape of the image */}
               <path
-                d={pathData}
+                d={pathDataImage}
+                transform={`translate(${OFFSET}, ${OFFSET})`}
                 fill="none"
                 stroke="var(--color-accent-blue)"
                 strokeWidth="1.5"
@@ -256,8 +281,8 @@ export default function ImageViewer() {
               
               {/* Outer sharp corner bounding box */}
               <rect
-                x="0"
-                y="0"
+                x={OFFSET}
+                y={OFFSET}
                 width={WIDTH}
                 height={HEIGHT}
                 fill="none"
@@ -267,17 +292,17 @@ export default function ImageViewer() {
               />
               
               {/* Bounding box corner squares */}
-              <rect x="-3" y="-3" width="6" height="6" fill="#16161a" stroke="var(--color-accent-blue)" strokeWidth="1" />
-              <rect x={WIDTH - 3} y="-3" width="6" height="6" fill="#16161a" stroke="var(--color-accent-blue)" strokeWidth="1" />
-              <rect x={WIDTH - 3} y={HEIGHT - 3} width="6" height="6" fill="#16161a" stroke="var(--color-accent-blue)" strokeWidth="1" />
-              <rect x="-3" y={HEIGHT - 3} width="6" height="6" fill="#16161a" stroke="var(--color-accent-blue)" strokeWidth="1" />
+              <rect x={OFFSET - 3} y={OFFSET - 3} width="6" height="6" fill="#16161a" stroke="var(--color-accent-blue)" strokeWidth="1" />
+              <rect x={WIDTH + OFFSET - 3} y={OFFSET - 3} width="6" height="6" fill="#16161a" stroke="var(--color-accent-blue)" strokeWidth="1" />
+              <rect x={WIDTH + OFFSET - 3} y={HEIGHT + OFFSET - 3} width="6" height="6" fill="#16161a" stroke="var(--color-accent-blue)" strokeWidth="1" />
+              <rect x={OFFSET - 3} y={HEIGHT + OFFSET - 3} width="6" height="6" fill="#16161a" stroke="var(--color-accent-blue)" strokeWidth="1" />
 
               {/* Fillet Drag Gizmo Diagonal Line */}
               <line
-                x1="0"
-                y1="0"
-                x2={R}
-                y2={R}
+                x1={OFFSET}
+                y1={OFFSET}
+                x2={R + OFFSET}
+                y2={R + OFFSET}
                 stroke="var(--color-accent-orange)"
                 strokeWidth="1.5"
               />
@@ -328,7 +353,7 @@ export default function ImageViewer() {
           )}
         </svg>
 
-        {/* HTML Fillet Handle overlay (placed on top, capturing clicks reliably outside SVG bounds) */}
+        {/* HTML Fillet Handle overlay (placed on top of the image corner) */}
         {isSelected && (
           <div
             style={{
@@ -368,7 +393,7 @@ const styles: Record<string, React.CSSProperties> = {
   imageContainer: {
     width: `${WIDTH}px`,
     height: `${HEIGHT}px`,
-    backgroundColor: "transparent", // Removed gray backdrop
+    backgroundColor: "transparent",
     position: "relative",
     borderRadius: "16px",
     padding: "0",
@@ -377,7 +402,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     userSelect: "none",
-    boxShadow: "none", // Removed shadow behind container
+    boxShadow: "none",
   },
   image: {
     width: "100%",
@@ -388,10 +413,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
   svgOverlay: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    width: "100%",
-    height: "100%",
     pointerEvents: "none",
     overflow: "visible",
   },
