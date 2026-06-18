@@ -43,7 +43,7 @@ export default function Home() {
   const [draftStart, setDraftStart] = useState<Point | null>(null);
   const [mousePos, setMousePos] = useState<Point>({ x: 0, y: 0 });
   const [isImageSelected, setIsImageSelected] = useState(false);
-  const [radius, setRadius] = useState(40); // Lifted corner radius state
+  const [radius, setRadius] = useState(0); // Starting fillet radius set to 0 (sharp corners)
   
   const glowCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -102,9 +102,9 @@ export default function Home() {
       const centerX = w * 0.5;
       const centerY = h * 0.4;
 
-      // Scan local bounding box to optimize performance: only draw dither where it has opacity (d < 150px)
-      const halfBoxW = W / 2 + 150;
-      const halfBoxH = H / 2 + 150;
+      // Scan local bounding box: extended to W/H + 200px to ensure the glow has fully faded out
+      const halfBoxW = W / 2 + 200;
+      const halfBoxH = H / 2 + 200;
 
       const colStart = Math.max(0, Math.floor((centerX - halfBoxW) / gridSize));
       const colEnd = Math.min(Math.ceil(w / gridSize), Math.ceil((centerX + halfBoxW) / gridSize));
@@ -129,12 +129,13 @@ export default function Home() {
             // Decays slowly inside the image bounds
             density = Math.exp(-(d * d) / 900);
           } else {
-            // Decays outside the image (2500 makes the dither gradient extend beautifully behind the buttons)
+            // Decays outside the image
             density = Math.exp(-(d * d) / 2500);
           }
 
-          // Apply dither noise for high-fidelity retro grain
-          const dither = density + (Math.random() - 0.5) * 0.22;
+          // Scale dither noise with density so that noise decays to 0 at the edges and does not trigger cut-off dots
+          const noiseScale = Math.max(0, Math.min(1, density * 4));
+          const dither = density + (Math.random() - 0.5) * 0.22 * noiseScale;
 
           let char = "";
           if (dither > 0.75) {
