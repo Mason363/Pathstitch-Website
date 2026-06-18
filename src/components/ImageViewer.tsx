@@ -324,9 +324,8 @@ export default function ImageViewer({
                   cx={pt.x}
                   cy={pt.y}
                   r="3.5"
-                  fill="none"
-                  stroke="var(--color-accent-orange)"
-                  strokeWidth="0.75"
+                  fill="var(--color-accent-orange)"
+                  stroke="none"
                 />
               ))}
             </g>
@@ -352,7 +351,7 @@ export default function ImageViewer({
               d={pathData}
               fill="none"
               stroke="var(--color-accent-orange)"
-              strokeWidth="1.75"
+              strokeWidth="2.5"
               strokeDasharray="12 16"
               mask="url(#sewing-mask)"
             />
