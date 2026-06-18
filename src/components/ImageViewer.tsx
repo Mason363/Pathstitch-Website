@@ -77,9 +77,9 @@ export default function ImageViewer() {
 
     const perimeter = 2 * (W - 2 * R) + 2 * (H - 2 * R) + 2 * Math.PI * R;
     
-    // Spacing of sewing holes (approx. 20px apart)
-    const idealSpacing = 20;
-    const numHoles = Math.max(12, Math.round(perimeter / idealSpacing));
+    // Spacing of sewing holes (approx. 50px apart for wider spacing)
+    const idealSpacing = 50;
+    const numHoles = Math.max(8, Math.round(perimeter / idealSpacing));
     const spacing = perimeter / numHoles;
 
     const points: Point[] = [];
@@ -223,10 +223,7 @@ export default function ImageViewer() {
     <div style={styles.outerContainer}>
       <div 
         ref={containerRef}
-        style={{
-          ...styles.imageContainer,
-          boxShadow: isSelected ? "0 0 24px rgba(47, 128, 237, 0.25)" : "0 8px 32px rgba(0, 0, 0, 0.4)",
-        }}
+        style={styles.imageContainer}
         onClick={(e) => {
           e.stopPropagation();
           setIsSelected(true);
@@ -275,7 +272,7 @@ export default function ImageViewer() {
               <rect x={WIDTH - 3} y={HEIGHT - 3} width="6" height="6" fill="#16161a" stroke="var(--color-accent-blue)" strokeWidth="1" />
               <rect x="-3" y={HEIGHT - 3} width="6" height="6" fill="#16161a" stroke="var(--color-accent-blue)" strokeWidth="1" />
 
-              {/* Fillet Drag Gizmo (Yellow/Orange diagonal line and circular handle) */}
+              {/* Fillet Drag Gizmo Diagonal Line */}
               <line
                 x1="0"
                 y1="0"
@@ -284,23 +281,10 @@ export default function ImageViewer() {
                 stroke="var(--color-accent-orange)"
                 strokeWidth="1.5"
               />
-              <circle
-                cx={R}
-                cy={R}
-                r="7"
-                fill="var(--color-accent-orange)"
-                stroke="#fff"
-                strokeWidth="1.5"
-                style={{
-                  ...styles.filletHandle,
-                  transform: isDragging ? "scale(1.25)" : "scale(1)",
-                }}
-                onMouseDown={handleMouseDown}
-              />
             </>
           )}
 
-          {/* Sewing animation circles (holes) */}
+          {/* Sewing animation circles (holes) - spaced further apart */}
           {(anim.phase === "holes-appear" || anim.phase === "holes-disappear") && (
             <g>
               {points.slice(0, anim.count).map((pt, idx) => (
@@ -331,18 +315,40 @@ export default function ImageViewer() {
             </mask>
           </defs>
 
-          {/* Sewing animation stitches (dashed lines) */}
+          {/* Sewing animation stitches (dashed lines) - dashes further spaced */}
           {(anim.phase === "dashed-draw" || anim.phase === "hold") && (
             <path
               d={pathData}
               fill="none"
               stroke="var(--color-accent-orange)"
               strokeWidth="1.75"
-              strokeDasharray="7 5"
+              strokeDasharray="12 16"
               mask="url(#sewing-mask)"
             />
           )}
         </svg>
+
+        {/* HTML Fillet Handle overlay (placed on top, capturing clicks reliably outside SVG bounds) */}
+        {isSelected && (
+          <div
+            style={{
+              position: "absolute",
+              top: `${R}px`,
+              left: `${R}px`,
+              width: "14px",
+              height: "14px",
+              borderRadius: "50%",
+              backgroundColor: "var(--color-accent-orange)",
+              border: "1.5px solid #fff",
+              cursor: "nwse-resize",
+              transform: "translate(-50%, -50%)",
+              zIndex: 50,
+              boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
+              pointerEvents: "auto",
+            }}
+            onMouseDown={handleMouseDown}
+          />
+        )}
       </div>
     </div>
   );
@@ -362,7 +368,7 @@ const styles: Record<string, React.CSSProperties> = {
   imageContainer: {
     width: `${WIDTH}px`,
     height: `${HEIGHT}px`,
-    backgroundColor: "#16161a",
+    backgroundColor: "transparent", // Removed gray backdrop
     position: "relative",
     borderRadius: "16px",
     padding: "0",
@@ -371,7 +377,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     userSelect: "none",
-    transition: "box-shadow 0.2s ease",
+    boxShadow: "none", // Removed shadow behind container
   },
   image: {
     width: "100%",
@@ -387,10 +393,5 @@ const styles: Record<string, React.CSSProperties> = {
     height: "100%",
     pointerEvents: "none",
     overflow: "visible",
-  },
-  filletHandle: {
-    pointerEvents: "auto",
-    cursor: "nwse-resize",
-    transition: "transform 0.1s ease",
   },
 };
