@@ -126,7 +126,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   contentLayout: {
     position: "absolute",
-    top: "44%", // Shifted up to make space for the buttons and footer draggable text
+    top: "40%", // Shifted further up to 40% height
     left: "50%",
     transform: "translate(-50%, -50%)",
     zIndex: 10,
