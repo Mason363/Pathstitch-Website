@@ -48,7 +48,7 @@ a, button, input, select, textarea, [role="button"], .canvas-container, .draggab
   cursor: pointer;
 }
 
-/* CAD Grid Background */
+/* CAD Grid Background - Large grid lines only */
 .cad-grid {
   position: absolute;
   top: 0;
@@ -58,10 +58,8 @@ a, button, input, select, textarea, [role="button"], .canvas-container, .draggab
   background-color: var(--bg-workspace);
   background-image: 
     linear-gradient(var(--border-color) 1px, transparent 1px),
-    linear-gradient(90deg, var(--border-color) 1px, transparent 1px),
-    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-  background-size: 100px 100px, 100px 100px, 10px 10px, 10px 10px;
+    linear-gradient(90deg, var(--border-color) 1px, transparent 1px);
+  background-size: 100px 100px;
   background-position: center center;
   z-index: 0;
 }
