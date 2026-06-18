@@ -35,7 +35,7 @@ export default function DraggableFooter({
     import("fabric").then(({ Canvas, FabricText }) => {
       if (!isComponentActive || !canvasRef.current) return;
 
-      // Prevent duplicate initialization on the same element
+      // Prevent duplicate canvas initialization on the same element
       if (fabricRef.current) return;
 
       const width = window.innerWidth;
@@ -54,8 +54,8 @@ export default function DraggableFooter({
       fabricRef.current = canvas;
 
       const letters = ["P", "a", "t", "h", "s", "t", "i", "t", "c", "h"];
-      const fontSize = 200; // Even larger letters
-      const letterSpacing = 150; // Increased spacing for larger font
+      const fontSize = 200; // Extra large letters
+      const letterSpacing = 150; // Spacing for 200px font size
       const wordWidth = (letters.length - 1) * letterSpacing;
       const startX = (width - wordWidth) / 2;
       const startY = height - (fontSize * (2 / 3)); // 1/3 clipped at bottom bounds
@@ -71,7 +71,7 @@ export default function DraggableFooter({
           stroke: "rgba(255, 255, 255, 0.15)",
           strokeWidth: 0.5,
           hasControls: false, // Remove scaling/rotating handles
-          hasBorders: false, // Remove bounding box border
+          hasBorders: false, // Remove selection box border
           lockScalingX: true,
           lockScalingY: true,
           lockRotation: true,
@@ -108,9 +108,6 @@ export default function DraggableFooter({
       };
 
       window.addEventListener("resize", handleResize);
-
-      // Clean up event listener inside dynamic import
-      canvas.on("object:removed", () => {});
     });
 
     return () => {
