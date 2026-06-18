@@ -46,7 +46,10 @@ export default function DraggableFooter({
         width: width,
         height: height,
         backgroundColor: "transparent",
-        selection: false, // Disable group selection box
+        selection: true, // Enable selection to ensure dragging works
+        selectionColor: "transparent", // Hide group selection marquee box
+        selectionBorderColor: "transparent",
+        selectionLineWidth: 0,
         hoverCursor: "move",
       });
 
@@ -62,8 +65,8 @@ export default function DraggableFooter({
       // Helper function to position letters correctly on load and resize
       const repositionLetters = (w: number, h: number) => {
         const startX = (w - wordWidth) / 2;
-        // fontSize * 0.62 ensures exactly 1/3 of the Montserrat capital letter height is clipped at the bottom
-        const startY = h - (fontSize * 0.62); 
+        // Align letters to the very bottom of the viewport (fontSize * 0.85 aligns the baseline to the bottom edge)
+        const startY = h - (fontSize * 0.85); 
         
         textObjects.forEach((textObj, index) => {
           textObj.set({
@@ -93,6 +96,8 @@ export default function DraggableFooter({
             lockScalingX: true,
             lockScalingY: true,
             lockRotation: true,
+            selectable: true, // Explicitly enable selection for dragging
+            evented: true,    // Explicitly enable event handling
             padding: 0,
           });
 
