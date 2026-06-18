@@ -29,13 +29,14 @@
 
 html,
 body {
-  width: 100%;
-  height: 100%;
+  width: 100% !important;
+  height: 100% !important;
   background-color: var(--bg-workspace);
   color: var(--text-primary);
   font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  overflow: hidden;
-  -webkit-font-smoothing: antialiased;
+  overflow: hidden !important; /* Force no scrolling under any circumstance */
+  margin: 0;
+  padding: 0;
 }
 
 /* Custom technical crosshair cursor */
@@ -46,6 +47,15 @@ body {
 /* Ensure interactive elements have standard cursors */
 a, button, input, select, textarea, [role="button"], .canvas-container, .draggable-handle {
   cursor: pointer;
+}
+
+canvas {
+  display: block !important; /* Prevent inline-block baseline padding from creating scroll space */
+}
+
+.canvas-container {
+  display: block !important;
+  overflow: hidden !important;
 }
 
 /* CAD Grid Background - Large grid lines only */
@@ -66,23 +76,7 @@ a, button, input, select, textarea, [role="button"], .canvas-container, .draggab
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #3a3a3c;
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #48484a;
-}
-
-/* Selection outline animation helper */
-@keyframes dash-pulse {
-  to {
-    stroke-dashoffset: -20;
-  }
+  display: none !important; /* Hide scrollbars entirely */
+  width: 0px;
+  height: 0px;
 }
