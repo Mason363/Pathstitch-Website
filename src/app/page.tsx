@@ -102,9 +102,9 @@ export default function Home() {
       const centerX = w * 0.5;
       const centerY = h * 0.4;
 
-      // Scan local bounding box: extended to W/H + 200px to ensure the glow has fully faded out
-      const halfBoxW = W / 2 + 200;
-      const halfBoxH = H / 2 + 200;
+      // Scan local bounding box: extended to W/H + 250px to ensure the glow has fully faded out
+      const halfBoxW = W / 2 + 250;
+      const halfBoxH = H / 2 + 250;
 
       const colStart = Math.max(0, Math.floor((centerX - halfBoxW) / gridSize));
       const colEnd = Math.min(Math.ceil(w / gridSize), Math.ceil((centerX + halfBoxW) / gridSize));
@@ -127,25 +127,27 @@ export default function Home() {
           let density = 0;
           if (d <= 0) {
             // Decays slowly inside the image bounds
-            density = Math.exp(-(d * d) / 900);
+            density = Math.exp(-(d * d) / 1600);
           } else {
-            // Decays outside the image
-            density = Math.exp(-(d * d) / 2500);
+            // Decays outside the image with a wider decay for seamless gradient
+            density = Math.exp(-(d * d) / 3600);
           }
 
           // Scale dither noise with density so that noise decays to 0 at the edges and does not trigger cut-off dots
           const noiseScale = Math.max(0, Math.min(1, density * 4));
-          const dither = density + (Math.random() - 0.5) * 0.22 * noiseScale;
+          const dither = density + (Math.random() - 0.5) * 0.4 * noiseScale;
 
           let char = "";
-          if (dither > 0.75) {
-            char = "●";
-          } else if (dither > 0.45) {
-            char = "•";
+          if (dither > 0.80) {
+            char = "●"; // Largest dot
+          } else if (dither > 0.60) {
+            char = "•"; // Medium-large dot
+          } else if (dither > 0.40) {
+            char = "∙"; // Medium dot
           } else if (dither > 0.20) {
-            char = "·";
+            char = "·"; // Small dot
           } else if (dither > 0.05) {
-            char = ".";
+            char = "."; // Smallest dot
           }
 
           if (char) {
