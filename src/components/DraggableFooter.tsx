@@ -57,31 +57,55 @@ export default function DraggableFooter({
       const fontSize = 200; // Extra large letters
       const letterSpacing = 150; // Spacing for 200px font size
       const wordWidth = (letters.length - 1) * letterSpacing;
-      const startX = (width - wordWidth) / 2;
-      const startY = height - (fontSize * (2 / 3)); // 1/3 clipped at bottom bounds
+      const textObjects: any[] = [];
 
-      letters.forEach((char, index) => {
-        const textObj = new FabricText(char, {
-          left: startX + index * letterSpacing,
-          top: startY,
-          fontFamily: "Montserrat",
-          fontSize: fontSize,
-          fontWeight: "900", // Montserrat Black
-          fill: "#ffffff",
-          stroke: "rgba(255, 255, 255, 0.15)",
-          strokeWidth: 0.5,
-          hasControls: false, // Remove scaling/rotating handles
-          hasBorders: false, // Remove selection box border
-          lockScalingX: true,
-          lockScalingY: true,
-          lockRotation: true,
-          padding: 0,
+      // Helper function to position letters correctly on load and resize
+      const repositionLetters = (w: number, h: number) => {
+        const startX = (w - wordWidth) / 2;
+        // fontSize * 0.62 ensures exactly 1/3 of the Montserrat capital letter height is clipped at the bottom
+        const startY = h - (fontSize * 0.62); 
+        
+        textObjects.forEach((textObj, index) => {
+          textObj.set({
+            left: startX + index * letterSpacing,
+            top: startY,
+          });
+          textObj.setCoords();
+        });
+      };
+
+      // Wait for fonts to be ready before adding text, ensuring correct metrics and rendering
+      document.fonts.ready.then(() => {
+        if (!isComponentActive || !fabricRef.current) return;
+
+        letters.forEach((char, index) => {
+          const textObj = new FabricText(char, {
+            left: 0,
+            top: 0,
+            fontFamily: "Montserrat",
+            fontSize: fontSize,
+            fontWeight: "900", // Montserrat Black
+            fill: "#ffffff",
+            stroke: "rgba(255, 255, 255, 0.15)",
+            strokeWidth: 0.5,
+            hasControls: false, // Remove scaling/rotating handles
+            hasBorders: false, // Remove selection box border
+            lockScalingX: true,
+            lockScalingY: true,
+            lockRotation: true,
+            padding: 0,
+          });
+
+          // Upright starting position (no rotation)
+          textObj.rotate(0);
+
+          canvas.add(textObj);
+          textObjects.push(textObj);
         });
 
-        // Upright starting position (no rotation)
-        textObj.rotate(0);
-
-        canvas.add(textObj);
+        // Initial layout positioning
+        repositionLetters(window.innerWidth, window.innerHeight);
+        canvas.renderAll();
       });
 
       // Handle background clicks for drawing measurements
@@ -104,6 +128,7 @@ export default function DraggableFooter({
         const newWidth = window.innerWidth;
         const newHeight = window.innerHeight;
         fabricRef.current.setDimensions({ width: newWidth, height: newHeight });
+        repositionLetters(newWidth, newHeight);
         fabricRef.current.renderAll();
       };
 
