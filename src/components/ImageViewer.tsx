@@ -384,6 +384,7 @@ const styles: Record<string, React.CSSProperties> = {
     height: "100%",
     objectFit: "cover",
     display: "block",
+    overflow: "hidden",
   },
   svgOverlay: {
     position: "absolute",
