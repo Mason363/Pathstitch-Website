@@ -1,0 +1,90 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&display=swap');
+
+:root {
+  --bg-workspace: #121214;
+  --bg-panel: #1c1c1f;
+  --bg-panel-header: #242428;
+  --color-accent-blue: #2f80ed;
+  --color-accent-blue-hover: #1f70dd;
+  --color-accent-blue-dim: rgba(47, 128, 237, 0.15);
+  --color-accent-orange: #ff9f0a;
+  --color-accent-orange-dim: rgba(255, 159, 10, 0.15);
+  --color-accent-red: #ff3b30;
+  --color-accent-green: #34c759;
+  --text-primary: #ededed;
+  --text-secondary: #9a9a9f;
+  --text-muted: #636366;
+  --border-color: #2c2c2e;
+  
+  --bg-footer-cream: #fbf6ee;
+  --text-footer-brown: #3b2d23;
+  --border-footer-brown: #c7baaa;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  background-color: var(--bg-workspace);
+  color: var(--text-primary);
+  font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom technical crosshair cursor */
+body {
+  cursor: crosshair;
+}
+
+/* Ensure interactive elements have standard cursors */
+a, button, input, select, textarea, [role="button"], .canvas-container, .draggable-handle {
+  cursor: pointer;
+}
+
+/* CAD Grid Background */
+.cad-grid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--bg-workspace);
+  background-image: 
+    linear-gradient(var(--border-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border-color) 1px, transparent 1px),
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 100px 100px, 100px 100px, 10px 10px, 10px 10px;
+  background-position: center center;
+  z-index: 0;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #3a3a3c;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #48484a;
+}
+
+/* Selection outline animation helper */
+@keyframes dash-pulse {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
