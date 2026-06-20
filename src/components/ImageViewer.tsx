@@ -3,8 +3,6 @@
 import React, { useEffect, useRef, useState } from "react";
 
 const IMAGE_SRC = "/main-image.png";
-const WIDTH = 720;
-const HEIGHT = 480;
 const OFFSET = 12; // Outward offset in pixels for the sewing/dashed animation ring
 
 interface Point {
@@ -17,14 +15,17 @@ interface ImageViewerProps {
   setIsSelected: (selected: boolean) => void;
   radius: number;
   setRadius: (r: number) => void;
+  dimensions?: { width: number; height: number };
 }
 
 export default function ImageViewer({ 
   isSelected, 
   setIsSelected,
   radius,
-  setRadius
+  setRadius,
+  dimensions = { width: 720, height: 480 }
 }: ImageViewerProps) {
+  const { width, height } = dimensions;
   const [isDragging, setIsDragging] = useState(false);
   const [animationProgress, setAnimationProgress] = useState(0); // 0 to 90000 ms (1m 30s)
   
@@ -61,10 +62,10 @@ export default function ImageViewer({
 
   // Compute points along the offset filleted rectangle perimeter for the animation ring
   const getPoints = (): { points: Point[]; perimeter: number } => {
-    const R = Math.max(0, Math.min(radius, HEIGHT / 2));
+    const R = Math.max(0, Math.min(radius, height / 2));
     const R_ring = R + OFFSET;
-    const W = WIDTH + 2 * OFFSET;
-    const H = HEIGHT + 2 * OFFSET;
+    const W = width + 2 * OFFSET;
+    const H = height + 2 * OFFSET;
 
     // Segment lengths
     const L_top = W - 2 * R_ring;
@@ -172,10 +173,10 @@ export default function ImageViewer({
   const anim = getAnimationState();
 
   // Bounding box path matching the offset filleted rect for the animation
-  const R = Math.max(0, Math.min(radius, HEIGHT / 2));
+  const R = Math.max(0, Math.min(radius, height / 2));
   const R_ring = R + OFFSET;
-  const W_ring = WIDTH + 2 * OFFSET;
-  const H_ring = HEIGHT + 2 * OFFSET;
+  const W_ring = width + 2 * OFFSET;
+  const H_ring = height + 2 * OFFSET;
 
   const pathData = `
     M ${R_ring} 0
@@ -193,34 +194,50 @@ export default function ImageViewer({
   // Path data for the selection highlight (aligned exactly with the image borders)
   const pathDataImage = `
     M ${R} 0
-    H ${WIDTH - R}
-    A ${R} ${R} 0 0 1 ${WIDTH} ${R}
-    V ${HEIGHT - R}
-    A ${R} ${R} 0 0 1 ${WIDTH - R} ${HEIGHT}
+    H ${width - R}
+    A ${R} ${R} 0 0 1 ${width} ${R}
+    V ${height - R}
+    A ${R} ${R} 0 0 1 ${width - R} ${height}
     H ${R}
-    A ${R} ${R} 0 0 1 0 ${HEIGHT - R}
+    A ${R} ${R} 0 0 1 0 ${height - R}
     V ${R}
     A ${R} ${R} 0 0 1 ${R} 0
     Z
   `.trim().replace(/\s+/g, " ");
 
-  // Handle fillet corner dragging
+  // Handle fillet corner dragging (mouse + touch)
   const handleMouseDown = (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsDragging(true);
   };
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
+    const handleMove = (clientX: number, clientY: number) => {
       if (!isDragging || !containerRef.current) return;
 
       const rect = containerRef.current.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      const x = clientX - rect.left;
+      const y = clientY - rect.top;
 
-      // Project mouse position onto 45-deg diagonal
-      const newRadius = Math.max(0, Math.min(HEIGHT / 2, (x + y) / 2));
+      // Project position onto 45-deg diagonal
+      const newRadius = Math.max(0, Math.min(height / 2, (x + y) / 2));
       setRadius(Math.round(newRadius));
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      handleMove(e.clientX, e.clientY);
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isDragging || e.touches.length !== 1) return;
+      if (e.cancelable) e.preventDefault();
+      const touch = e.touches[0];
+      handleMove(touch.clientX, touch.clientY);
     };
 
     const handleMouseUp = () => {
@@ -230,20 +247,28 @@ export default function ImageViewer({
     if (isDragging) {
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("mouseup", handleMouseUp);
+      window.addEventListener("touchmove", handleTouchMove, { passive: false });
+      window.addEventListener("touchend", handleMouseUp);
     }
 
     return () => {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleMouseUp);
     };
-  }, [isDragging, setRadius]);
+  }, [isDragging, height, setRadius]);
 
   return (
     <div style={styles.outerContainer}>
       <div 
         id="image-container"
         ref={containerRef}
-        style={styles.imageContainer}
+        style={{
+          ...styles.imageContainer,
+          width: `${width}px`,
+          height: `${height}px`,
+        }}
         onClick={(e) => {
           e.stopPropagation();
           setIsSelected(true);
@@ -267,11 +292,11 @@ export default function ImageViewer({
             ...styles.svgOverlay,
             top: -OFFSET,
             left: -OFFSET,
-            width: WIDTH + 2 * OFFSET,
-            height: HEIGHT + 2 * OFFSET,
+            width: width + 2 * OFFSET,
+            height: height + 2 * OFFSET,
           }} 
-          width={WIDTH + 2 * OFFSET} 
-          height={HEIGHT + 2 * OFFSET}
+          width={width + 2 * OFFSET} 
+          height={height + 2 * OFFSET}
         >
           {/* CAD selection highlight (Only when selected, aligned with the image boundary) */}
           {isSelected && (
@@ -289,8 +314,8 @@ export default function ImageViewer({
               <rect
                 x={OFFSET}
                 y={OFFSET}
-                width={WIDTH}
-                height={HEIGHT}
+                width={width}
+                height={height}
                 fill="none"
                 stroke="rgba(47, 128, 237, 0.35)"
                 strokeWidth="1"
@@ -299,9 +324,9 @@ export default function ImageViewer({
               
               {/* Bounding box corner squares */}
               <rect x={OFFSET - 3} y={OFFSET - 3} width="6" height="6" fill="#16161a" stroke="var(--color-accent-blue)" strokeWidth="1" />
-              <rect x={WIDTH + OFFSET - 3} y={OFFSET - 3} width="6" height="6" fill="#16161a" stroke="var(--color-accent-blue)" strokeWidth="1" />
-              <rect x={WIDTH + OFFSET - 3} y={HEIGHT + OFFSET - 3} width="6" height="6" fill="#16161a" stroke="var(--color-accent-blue)" strokeWidth="1" />
-              <rect x={OFFSET - 3} y={HEIGHT + OFFSET - 3} width="6" height="6" fill="#16161a" stroke="var(--color-accent-blue)" strokeWidth="1" />
+              <rect x={width + OFFSET - 3} y={OFFSET - 3} width="6" height="6" fill="#16161a" stroke="var(--color-accent-blue)" strokeWidth="1" />
+              <rect x={width + OFFSET - 3} y={height + OFFSET - 3} width="6" height="6" fill="#16161a" stroke="var(--color-accent-blue)" strokeWidth="1" />
+              <rect x={OFFSET - 3} y={height + OFFSET - 3} width="6" height="6" fill="#16161a" stroke="var(--color-accent-blue)" strokeWidth="1" />
 
               {/* Fillet Drag Gizmo Diagonal Line */}
               <line
@@ -377,6 +402,7 @@ export default function ImageViewer({
               pointerEvents: "auto",
             }}
             onMouseDown={handleMouseDown}
+            onTouchStart={handleTouchStart}
           />
         )}
       </div>
@@ -396,8 +422,6 @@ const styles: Record<string, React.CSSProperties> = {
     pointerEvents: "auto",
   },
   imageContainer: {
-    width: `${WIDTH}px`,
-    height: `${HEIGHT}px`,
     backgroundColor: "transparent",
     position: "relative",
     borderRadius: "16px",

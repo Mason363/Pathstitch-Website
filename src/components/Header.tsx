@@ -1,11 +1,26 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 
 export default function Header() {
+  const [isMobileRatio, setIsMobileRatio] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileRatio(window.innerWidth < window.innerHeight);
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   return (
-    <div style={styles.header}>
+    <div style={{
+      ...styles.header,
+      top: isMobileRatio ? "16px" : "24px",
+      left: isMobileRatio ? "16px" : "24px"
+    }}>
       {/* Logo and App Name branding */}
       <div style={styles.logoBrand}>
         <div style={styles.logoInnerContainer}>

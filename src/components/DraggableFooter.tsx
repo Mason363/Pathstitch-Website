@@ -24,6 +24,9 @@ export default function DraggableFooter({
   onBackgroundMouseMove,
 }: DraggableFooterProps) {
   const [lettersData, setLettersData] = useState<LetterState[]>([]);
+  const [letterSpacing, setLetterSpacing] = useState(145);
+  const [fontSize, setFontSize] = useState(200);
+  
   const dragInfo = useRef<{
     index: number;
     startX: number;
@@ -37,15 +40,28 @@ export default function DraggableFooter({
     const handleResize = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
-      const letterSpacing = 145; // Clean spacing between letters
+      const isMobileRatio = w < h;
+      
+      let spacing = 145; // Clean spacing between letters
+      let fSize = 200;
+      
+      if (isMobileRatio) {
+        // Fit letters inside screen width with a small margin
+        spacing = Math.min(145, (w * 0.92) / 10);
+        fSize = spacing / 0.725;
+      }
+      
+      setLetterSpacing(spacing);
+      setFontSize(fSize);
+      
       const letters = ["P", "a", "t", "h", "s", "t", "i", "t", "c", "h"];
       // Center word box: total width is letters.length * letterSpacing
-      const totalWordWidth = letters.length * letterSpacing;
+      const totalWordWidth = letters.length * spacing;
       const startX = (w - totalWordWidth) / 2;
       
       // Position startY so that the bottom of the letters touches the bottom of the viewport
-      // With fontSize=200px and lineHeight=0.8, startY = h - 150 ensures the letters sit exactly on the bottom edge
-      const startY = h - 150; 
+      // With dynamic fontSize and lineHeight=0.8, startY = h - fSize * 0.75 ensures the letters sit exactly on the bottom edge
+      const startY = h - fSize * 0.75; 
 
       setLettersData((prev) => {
         return letters.map((char, index) => {
@@ -56,7 +72,7 @@ export default function DraggableFooter({
           }
           return {
             char,
-            x: startX + index * letterSpacing,
+            x: startX + index * spacing,
             y: startY,
             hasDragged: false,
           };
@@ -69,13 +85,13 @@ export default function DraggableFooter({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Handle letter dragging via window mousemove/mouseup
+  // Handle letter dragging via window mouse/touch events
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
+    const handleMove = (clientX: number, clientY: number) => {
       if (!dragInfo.current) return;
       const { index, startX, startY, startLeft, startTop } = dragInfo.current;
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
+      const dx = clientX - startX;
+      const dy = clientY - startY;
 
       setLettersData((prev) => {
         const next = [...prev];
@@ -89,15 +105,31 @@ export default function DraggableFooter({
       });
     };
 
-    const handleMouseUp = () => {
+    const handleMouseMove = (e: MouseEvent) => {
+      handleMove(e.clientX, e.clientY);
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!dragInfo.current || e.touches.length !== 1) return;
+      // Prevent scrolling while dragging letters
+      if (e.cancelable) e.preventDefault();
+      const touch = e.touches[0];
+      handleMove(touch.clientX, touch.clientY);
+    };
+
+    const handleEnd = () => {
       dragInfo.current = null;
     };
 
     window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("mouseup", handleEnd);
+    window.addEventListener("touchmove", handleTouchMove, { passive: false });
+    window.addEventListener("touchend", handleEnd);
     return () => {
       window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("mouseup", handleEnd);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleEnd);
     };
   }, []);
 
@@ -114,16 +146,41 @@ export default function DraggableFooter({
     };
   };
 
+  const handleTouchStart = (index: number, e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    e.stopPropagation(); // Avoid triggering drafting on the background overlay
+    const touch = e.touches[0];
+    const letter = lettersData[index];
+    dragInfo.current = {
+      index,
+      startX: touch.clientX,
+      startY: touch.clientY,
+      startLeft: letter.x,
+      startTop: letter.y,
+    };
+  };
+
   return (
     <div style={styles.footerContainer}>
       {/* Background click overlay for drafting CAD measurements */}
       <div
+        id="measurement-overlay"
         style={styles.measurementOverlay}
         onMouseDown={(e) => {
           onBackgroundClick({ x: e.clientX, y: e.clientY });
         }}
         onMouseMove={(e) => {
           onBackgroundMouseMove({ x: e.clientX, y: e.clientY });
+        }}
+        onTouchStart={(e) => {
+          if (e.touches.length !== 1) return;
+          const touch = e.touches[0];
+          onBackgroundClick({ x: touch.clientX, y: touch.clientY });
+        }}
+        onTouchMove={(e) => {
+          if (e.touches.length !== 1) return;
+          const touch = e.touches[0];
+          onBackgroundMouseMove({ x: touch.clientX, y: touch.clientY });
         }}
       />
 
@@ -132,14 +189,15 @@ export default function DraggableFooter({
         <div
           key={index}
           onMouseDown={(e) => handleMouseDown(index, e)}
+          onTouchStart={(e) => handleTouchStart(index, e)}
           style={{
             position: "absolute",
             left: `${item.x}px`,
             top: `${item.y}px`,
-            width: "145px", // Match letterSpacing for horizontal centering
+            width: `${letterSpacing}px`, // Match letterSpacing for horizontal centering
             textAlign: "center", // Center align each letter inside its slot
             fontFamily: "var(--font-montserrat), 'Montserrat', sans-serif",
-            fontSize: "200px",
+            fontSize: `${fontSize}px`,
             fontWeight: 900, // Montserrat Black
             color: "#ffffff",
             userSelect: "none",
