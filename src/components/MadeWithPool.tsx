@@ -101,7 +101,7 @@ export default function MadeWithPool() {
       const rect = wrap.getBoundingClientRect();
       W = rect.width;
       H = rect.height;
-      const base = Math.max(56, Math.min(86, W / 18));
+      const base = Math.max(62, Math.min(96, W / 16));
       for (let i = 0; i < COUNT; i++) {
         const size = rand(base * 0.82, base * 1.18);
         const b: Body = {
@@ -166,11 +166,14 @@ export default function MadeWithPool() {
     };
 
     // ---- Physics (calm) ----
-    const GRAV = 0.17;
-    const AIR = 0.987;
-    const BOUND_K = 0.14; // soft containment spring
-    const PAIR_REST = 0.12;
+    const GRAV = 0.15;
+    const AIR = 0.985;
+    const BOUND_K = 0.12; // soft containment spring
     const MAX_SPEED = 8;
+    // Baumgarte-style collision softening — leaves a tiny stable overlap and
+    // corrects gradually, which kills the settled-pile jitter.
+    const SLOP = 0.6;
+    const CORRECT = 0.5;
 
     const step = () => {
       // smoothed pointer velocity
@@ -230,18 +233,26 @@ export default function MadeWithPool() {
         if (b.y > H - b.r) b.vy -= (b.y - (H - b.r)) * BOUND_K;
 
         // clamp speed so nothing ever bursts into a frenzy
-        const sp = Math.hypot(b.vx, b.vy);
-        if (sp > MAX_SPEED) {
+        const sp2 = b.vx * b.vx + b.vy * b.vy;
+        if (sp2 > MAX_SPEED * MAX_SPEED) {
+          const sp = Math.sqrt(sp2);
           b.vx = (b.vx / sp) * MAX_SPEED;
           b.vy = (b.vy / sp) * MAX_SPEED;
+        } else if (sp2 < 0.6) {
+          // sleep damping: nearly-resting tiles settle smoothly instead of
+          // shimmering. Fast (stirred/flung) tiles are untouched, so it never
+          // feels sluggish.
+          b.vx *= 0.6;
+          b.vy *= 0.6;
         }
 
         b.x += b.vx;
         b.y += b.vy;
         b.angle += b.av;
-        b.av *= 0.86; // spin dies quickly — no perpetual spinning
+        b.av *= 0.84; // spin dies quickly — no perpetual spinning
         if (b.av > 0.12) b.av = 0.12;
         else if (b.av < -0.12) b.av = -0.12;
+        else if (b.av < 0.0025 && b.av > -0.0025) b.av = 0;
 
         // hard backstop, also a full extent in, so the image never clips the
         // sides or top; the bottom may sit on the floor (the ground).
@@ -251,8 +262,9 @@ export default function MadeWithPool() {
         if (b.y > H) b.y = H;
       }
 
-      // collisions: positional correction + light impulse
-      for (let iter = 0; iter < 2; iter++) {
+      // collisions: soft positional correction (slop) + inelastic impulse.
+      // More iterations + partial correction = a stable, smooth stack.
+      for (let iter = 0; iter < 4; iter++) {
         for (let i = 0; i < bodies.length; i++) {
           const a = bodies[i];
           for (let k = i + 1; k < bodies.length; k++) {
@@ -265,14 +277,17 @@ export default function MadeWithPool() {
               const d = Math.sqrt(d2);
               const nx = dx / d;
               const ny = dy / d;
-              const overlap = (min - d) * 0.5;
-              a.x -= nx * overlap;
-              a.y -= ny * overlap;
-              c.x += nx * overlap;
-              c.y += ny * overlap;
+              // only correct the penetration beyond a small slop, and only
+              // partially — this is what removes the jitter
+              const corr = (Math.max(min - d - SLOP, 0) * CORRECT) / 2;
+              a.x -= nx * corr;
+              a.y -= ny * corr;
+              c.x += nx * corr;
+              c.y += ny * corr;
               const vn = (c.vx - a.vx) * nx + (c.vy - a.vy) * ny;
               if (vn < 0) {
-                const j = -(1 + PAIR_REST) * vn * 0.5;
+                // fully inelastic along the normal — no bounce, no jitter
+                const j = -vn * 0.5;
                 a.vx -= nx * j;
                 a.vy -= ny * j;
                 c.vx += nx * j;
