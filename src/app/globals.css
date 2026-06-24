@@ -289,9 +289,7 @@ h2.headline {
 .story {
   border-top: 1px solid var(--border-soft);
   border-bottom: 1px solid var(--border-soft);
-  background:
-    radial-gradient(900px 400px at 15% -10%, rgba(255, 159, 10, 0.06), transparent 60%),
-    var(--bg-workspace);
+  background: var(--bg-workspace);
 }
 .story-body {
   margin-top: 30px;
@@ -381,40 +379,13 @@ h2.headline {
   box-shadow: 0 0 0 4px var(--color-accent-orange-dim);
 }
 
-/* Media frame — looks like an app window in the workspace */
+/* Media frame — a clean bordered panel that sits in the workspace */
 .media-frame {
   position: relative;
-  border-radius: 14px;
+  border-radius: 12px;
   overflow: hidden;
   background: var(--bg-panel);
   border: 1px solid var(--border-color);
-  box-shadow:
-    0 30px 70px -20px rgba(0, 0, 0, 0.7),
-    0 0 0 1px rgba(255, 255, 255, 0.02) inset;
-}
-.media-frame::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 14px;
-  box-shadow: 0 0 80px -20px rgba(47, 128, 237, 0.25) inset;
-  pointer-events: none;
-  z-index: 2;
-}
-.media-titlebar {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 11px 14px;
-  background: var(--bg-panel-header);
-  border-bottom: 1px solid var(--border-color);
-}
-.media-dot { width: 11px; height: 11px; border-radius: 50%; }
-.media-titlebar .lbl {
-  margin-left: 10px;
-  font-family: var(--font-mono-stack);
-  font-size: 11px;
-  color: var(--text-muted);
 }
 .media-frame video,
 .media-frame img {
@@ -426,12 +397,7 @@ h2.headline {
 /* Capability band */
 .band {
   border-top: 1px solid var(--border-soft);
-  background:
-    linear-gradient(var(--border-color) 1px, transparent 1px),
-    linear-gradient(90deg, var(--border-color) 1px, transparent 1px),
-    var(--bg-elevated);
-  background-size: 100px 100px, 100px 100px, auto;
-  background-position: center, center, center;
+  background: var(--bg-elevated);
 }
 .band .overlay {
   position: relative;
@@ -503,9 +469,7 @@ h2.headline {
 .trust {
   text-align: center;
   border-top: 1px solid var(--border-soft);
-  background:
-    radial-gradient(700px 380px at 50% 0%, rgba(47, 128, 237, 0.08), transparent 60%),
-    var(--bg-workspace);
+  background: var(--bg-workspace);
 }
 .trust .headline { margin: 0 auto; max-width: 14ch; }
 .trust .lede { margin-left: auto; margin-right: auto; }
@@ -542,19 +506,6 @@ h2.headline {
   padding: 130px 32px 120px;
   border-top: 1px solid var(--border-soft);
   overflow: hidden;
-}
-.final-bg {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(var(--border-color) 1px, transparent 1px),
-    linear-gradient(90deg, var(--border-color) 1px, transparent 1px);
-  background-size: 60px 60px;
-  background-position: center;
-  -webkit-mask-image: radial-gradient(ellipse 60% 60% at 50% 50%, #000 10%, transparent 70%);
-  mask-image: radial-gradient(ellipse 60% 60% at 50% 50%, #000 10%, transparent 70%);
-  opacity: 0.6;
-  z-index: 0;
 }
 .final > * { position: relative; z-index: 1; }
 .final h2 {

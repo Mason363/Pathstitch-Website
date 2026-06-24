@@ -60,12 +60,6 @@ function LazyVideo({ src, poster, label }: { src: string; poster: string; label:
 
   return (
     <div className="media-frame">
-      <div className="media-titlebar">
-        <span className="media-dot" style={{ background: "#ff5f57" }} />
-        <span className="media-dot" style={{ background: "#febc2e" }} />
-        <span className="media-dot" style={{ background: "#28c840" }} />
-        <span className="lbl">{label}</span>
-      </div>
       <video
         ref={ref}
         src={src}
@@ -74,20 +68,15 @@ function LazyVideo({ src, poster, label }: { src: string; poster: string; label:
         loop
         playsInline
         preload="metadata"
+        aria-label={label}
       />
     </div>
   );
 }
 
-function FrameImage({ src, alt, label }: { src: string; alt: string; label: string }) {
+function FrameImage({ src, alt }: { src: string; alt: string }) {
   return (
     <div className="media-frame">
-      <div className="media-titlebar">
-        <span className="media-dot" style={{ background: "#ff5f57" }} />
-        <span className="media-dot" style={{ background: "#febc2e" }} />
-        <span className="media-dot" style={{ background: "#28c840" }} />
-        <span className="lbl">{label}</span>
-      </div>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={src} alt={alt} loading="lazy" />
     </div>
@@ -120,7 +109,7 @@ const FEATURES: Feature[] = [
       "On-creation dimensions — exact sizes, never eyeballed",
       "Import & trace reference images right on the canvas",
     ],
-    media: { type: "video", src: "/media/demo-draw.mp4", poster: "/media/shot-draw.png", label: "pathstitch — draw" },
+    media: { type: "video", src: "/media/demo-draw.mp4", poster: "/media/poster-draw.jpg", label: "pathstitch — draw" },
   },
   {
     tag: "02 / EDIT",
@@ -280,7 +269,6 @@ export default function LandingSections() {
       {/* ---------- Origin story ---------- */}
       <section className="story">
         <div className="section">
-          <span className="kicker reveal">The origin</span>
           <h2 className="headline reveal">It started with a hole.<br />A lot of holes, actually.</h2>
           <div className="story-body">
             <p className="reveal">
@@ -318,7 +306,6 @@ export default function LandingSections() {
         <section className="section" key={f.tag}>
           <div className={`feature ${f.reverse ? "reverse" : ""}`}>
             <div className="feature-copy reveal">
-              <div className="feature-tag">{f.tag}</div>
               <h3>{f.title}</h3>
               <p>{f.body}</p>
               <ul className="feature-bullets">
@@ -331,7 +318,7 @@ export default function LandingSections() {
               {f.media.type === "video" ? (
                 <LazyVideo src={f.media.src} poster={f.media.poster!} label={f.media.label} />
               ) : (
-                <FrameImage src={f.media.src} alt={f.title} label={f.media.label} />
+                <FrameImage src={f.media.src} alt={f.title} />
               )}
             </div>
           </div>
@@ -341,7 +328,6 @@ export default function LandingSections() {
       {/* ---------- Capability band ---------- */}
       <section className="band">
         <div className="section overlay">
-          <span className="kicker reveal">One workspace</span>
           <h2 className="headline reveal">Opens anything. Exports everything.</h2>
           <p className="lede reveal">
             Drag in a file and start working. Pathstitch reads vectors, 3D models, PDFs,
@@ -370,7 +356,6 @@ export default function LandingSections() {
       {/* ---------- Trust / open source ---------- */}
       <section className="trust">
         <div className="section">
-          <span className="kicker reveal" style={{ justifyContent: "center" }}>No catch</span>
           <h2 className="headline reveal">Free. Open-source. Yours.</h2>
           <p className="lede reveal">
             No subscription. No gatekeeping. No account. Pathstitch is <strong>GPLv3 and
@@ -400,7 +385,6 @@ export default function LandingSections() {
 
       {/* ---------- Final CTA ---------- */}
       <section className="final">
-        <div className="final-bg" />
         <h2 className="reveal">Pathstitch is for makers who&apos;d rather be making.</h2>
         <p className="reveal d1">
           No subscription. No fighting the software instead of making the thing. Just draw
