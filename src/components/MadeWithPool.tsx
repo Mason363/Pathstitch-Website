@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef } from "react";
 
-const COUNT = 81; // /public/pool/img-1.jpg .. img-81.jpg
+const COUNT = 81; // /public/pool/img-1.png .. img-81.png
 
 interface Body {
   x: number;
@@ -11,8 +11,16 @@ interface Body {
   vy: number;
   angle: number;
   av: number; // angular velocity
-  r: number;
+  r: number; // collision radius
+  halfW: number; // drawn half-width
+  halfH: number; // drawn half-height
+  size: number; // target longest side
   img: HTMLImageElement | null;
+  // alpha-trimmed source rect (set once the image decodes)
+  sx: number;
+  sy: number;
+  sw: number;
+  sh: number;
 }
 
 export default function MadeWithPool() {
@@ -31,10 +39,112 @@ export default function MadeWithPool() {
     let dpr = Math.min(window.devicePixelRatio || 1, 2);
     const bodies: Body[] = [];
 
-    // Pointer state (mouse + touch), tracked in canvas-space pixels
-    const pointer = { x: -9999, y: -9999, px: -9999, py: -9999, vx: 0, vy: 0, active: false };
+    // smoothed pointer (mouse + touch), canvas-space pixels
+    const ptr = { x: -9999, y: -9999, px: -9999, py: -9999, vx: 0, vy: 0, active: false };
 
     const rand = (a: number, b: number) => a + Math.random() * (b - a);
+
+    // offscreen canvas for trimming transparent margins
+    const off = document.createElement("canvas");
+    const offCtx = off.getContext("2d", { willReadFrequently: true });
+
+    const computeTrim = (img: HTMLImageElement) => {
+      const iw = img.naturalWidth;
+      const ih = img.naturalHeight;
+      if (!offCtx || !iw || !ih) return { sx: 0, sy: 0, sw: iw || 1, sh: ih || 1 };
+      off.width = iw;
+      off.height = ih;
+      offCtx.clearRect(0, 0, iw, ih);
+      offCtx.drawImage(img, 0, 0);
+      let data: Uint8ClampedArray;
+      try {
+        data = offCtx.getImageData(0, 0, iw, ih).data;
+      } catch {
+        return { sx: 0, sy: 0, sw: iw, sh: ih };
+      }
+      let minX = iw, minY = ih, maxX = 0, maxY = 0, found = false;
+      for (let y = 0; y < ih; y++) {
+        for (let x = 0; x < iw; x++) {
+          if (data[(y * iw + x) * 4 + 3] > 24) {
+            found = true;
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+      if (!found) return { sx: 0, sy: 0, sw: iw, sh: ih };
+      const pad = 2;
+      minX = Math.max(0, minX - pad);
+      minY = Math.max(0, minY - pad);
+      maxX = Math.min(iw - 1, maxX + pad);
+      maxY = Math.min(ih - 1, maxY + pad);
+      return { sx: minX, sy: minY, sw: maxX - minX + 1, sh: maxY - minY + 1 };
+    };
+
+    const applySize = (b: Body) => {
+      const aspect = b.sw / b.sh;
+      if (aspect >= 1) {
+        b.halfW = b.size / 2;
+        b.halfH = b.size / aspect / 2;
+      } else {
+        b.halfH = b.size / 2;
+        b.halfW = (b.size * aspect) / 2;
+      }
+      b.r = ((b.halfW + b.halfH) / 2) * 0.9;
+    };
+
+    const buildBodies = () => {
+      bodies.length = 0;
+      const rect = wrap.getBoundingClientRect();
+      W = rect.width;
+      H = rect.height;
+      const base = Math.max(46, Math.min(72, W / 22));
+      for (let i = 0; i < COUNT; i++) {
+        const size = rand(base * 0.82, base * 1.18);
+        const b: Body = {
+          x: rand(size, Math.max(size + 1, W - size)),
+          y: rand(-H * 1.1, -size),
+          vx: rand(-0.4, 0.4),
+          vy: rand(0, 0.6),
+          angle: rand(-0.35, 0.35),
+          av: 0,
+          r: size * 0.42,
+          halfW: size / 2,
+          halfH: size / 2,
+          size,
+          img: null,
+          sx: 0,
+          sy: 0,
+          sw: 1,
+          sh: 1,
+        };
+        bodies.push(b);
+      }
+    };
+
+    // shuffle so the pile is varied
+    const order = Array.from({ length: COUNT }, (_, i) => i + 1);
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+    const loadImages = () => {
+      bodies.forEach((b, i) => {
+        const im = new Image();
+        im.src = `/pool/img-${order[i]}.png`;
+        im.onload = () => {
+          const t = computeTrim(im);
+          b.sx = t.sx;
+          b.sy = t.sy;
+          b.sw = t.sw;
+          b.sh = t.sh;
+          b.img = im;
+          applySize(b);
+        };
+      });
+    };
 
     const resize = () => {
       const rect = wrap.getBoundingClientRect();
@@ -46,103 +156,79 @@ export default function MadeWithPool() {
       canvas.style.width = `${W}px`;
       canvas.style.height = `${H}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      // Keep bodies inside after a resize
+      // keep bodies horizontally inside; allow them to remain above the pool
+      // (they drop in from above on first load)
       for (const b of bodies) {
-        b.x = Math.max(b.r, Math.min(W - b.r, b.x));
-        b.y = Math.max(b.r, Math.min(H - b.r, b.y));
+        b.x = Math.max(0, Math.min(W, b.x));
+        if (b.y > H) b.y = H;
       }
     };
 
-    // Build bodies (sizes scale with viewport so tiles stay "relatively small")
-    const buildBodies = () => {
-      bodies.length = 0;
-      const rect = wrap.getBoundingClientRect();
-      W = rect.width;
-      H = rect.height;
-      const base = Math.max(22, Math.min(38, W / 32));
-      for (let i = 0; i < COUNT; i++) {
-        const r = rand(base * 0.82, base * 1.15);
-        bodies.push({
-          x: rand(r, Math.max(r + 1, W - r)),
-          y: rand(-H, -r), // drop in from above for a nice fill
-          vx: rand(-1, 1),
-          vy: rand(0, 1),
-          angle: rand(-0.4, 0.4),
-          av: rand(-0.04, 0.04),
-          r,
-          img: null,
-        });
-      }
-    };
-
-    // Lazy-load the thumbnails (shuffled so the pile is varied)
-    const order = Array.from({ length: COUNT }, (_, i) => i + 1);
-    for (let i = order.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [order[i], order[j]] = [order[j], order[i]];
-    }
-    const loadImages = () => {
-      bodies.forEach((b, i) => {
-        const im = new Image();
-        im.src = `/pool/img-${order[i]}.jpg`;
-        im.onload = () => {
-          b.img = im;
-        };
-      });
-    };
-
-    // ---- Physics ----
-    const GRAV = 0.32;
-    const AIR = 0.992;
-    const WALL_REST = 0.42;
-    const FLOOR_FRICTION = 0.9;
-    const PAIR_REST = 0.2;
+    // ---- Physics (calm) ----
+    const GRAV = 0.17;
+    const AIR = 0.987;
+    const BOUND_K = 0.14; // soft containment spring
+    const PAIR_REST = 0.12;
+    const MAX_SPEED = 8;
 
     const step = () => {
-      pointer.vx = pointer.x - pointer.px;
-      pointer.vy = pointer.y - pointer.py;
-      pointer.px = pointer.x;
-      pointer.py = pointer.y;
+      // smoothed pointer velocity (kills the "small move = frenzy" feel)
+      const rawvx = ptr.x - ptr.px;
+      const rawvy = ptr.y - ptr.py;
+      ptr.vx = ptr.vx * 0.7 + rawvx * 0.3;
+      ptr.vy = ptr.vy * 0.7 + rawvy * 0.3;
+      ptr.px = ptr.x;
+      ptr.py = ptr.y;
 
       for (const b of bodies) {
         b.vy += GRAV;
         b.vx *= AIR;
         b.vy *= AIR;
 
-        // Cursor interaction — push tiles away and fling them with the swipe
-        if (pointer.active) {
-          const dx = b.x - pointer.x;
-          const dy = b.y - pointer.y;
-          const reach = 130 + b.r;
+        // gentle cursor interaction
+        if (ptr.active) {
+          const dx = b.x - ptr.x;
+          const dy = b.y - ptr.y;
+          const reach = 100 + b.r;
           const d = Math.hypot(dx, dy) || 0.0001;
           if (d < reach) {
             const nx = dx / d;
             const ny = dy / d;
-            const f = (1 - d / reach) * 4.2;
-            b.vx += nx * f + pointer.vx * 0.16;
-            b.vy += ny * f + pointer.vy * 0.16;
-            b.av += (pointer.vx * ny - pointer.vy * nx) * 0.002;
+            const f = (1 - d / reach) * 1.4;
+            b.vx += nx * f + ptr.vx * 0.05;
+            b.vy += ny * f + ptr.vy * 0.05;
+            b.av += (ptr.vx * ny - ptr.vy * nx) * 0.0004;
           }
+        }
+
+        // soft containment — an invisible "force" instead of hard walls
+        if (b.x < b.r) b.vx += (b.r - b.x) * BOUND_K;
+        else if (b.x > W - b.r) b.vx -= (b.x - (W - b.r)) * BOUND_K;
+        if (b.y < b.r) b.vy += (b.r - b.y) * BOUND_K;
+        else if (b.y > H - b.r) b.vy -= (b.y - (H - b.r)) * BOUND_K;
+
+        // clamp speed so nothing ever bursts into a frenzy
+        const sp = Math.hypot(b.vx, b.vy);
+        if (sp > MAX_SPEED) {
+          b.vx = (b.vx / sp) * MAX_SPEED;
+          b.vy = (b.vy / sp) * MAX_SPEED;
         }
 
         b.x += b.vx;
         b.y += b.vy;
         b.angle += b.av;
-        b.av *= 0.95;
+        b.av *= 0.86; // spin dies quickly — no perpetual spinning
+        if (b.av > 0.12) b.av = 0.12;
+        else if (b.av < -0.12) b.av = -0.12;
 
-        // Walls
-        if (b.x < b.r) { b.x = b.r; b.vx = -b.vx * WALL_REST; b.av += b.vy * 0.004; }
-        else if (b.x > W - b.r) { b.x = W - b.r; b.vx = -b.vx * WALL_REST; b.av -= b.vy * 0.004; }
-        if (b.y < b.r) { b.y = b.r; b.vy = -b.vy * WALL_REST; }
-        else if (b.y > H - b.r) {
-          b.y = H - b.r;
-          b.vy = -b.vy * WALL_REST;
-          b.vx *= FLOOR_FRICTION;
-          b.av *= 0.85;
-        }
+        // hard backstop so a tile can never fully leave the pool
+        if (b.x < 0) b.x = 0;
+        else if (b.x > W) b.x = W;
+        if (b.y < 0) b.y = 0;
+        else if (b.y > H) b.y = H;
       }
 
-      // Pairwise collisions (positional correction + light elastic impulse)
+      // collisions: positional correction + light impulse
       for (let iter = 0; iter < 2; iter++) {
         for (let i = 0; i < bodies.length; i++) {
           const a = bodies[i];
@@ -161,10 +247,7 @@ export default function MadeWithPool() {
               a.y -= ny * overlap;
               c.x += nx * overlap;
               c.y += ny * overlap;
-              // relative velocity along normal
-              const rvx = c.vx - a.vx;
-              const rvy = c.vy - a.vy;
-              const vn = rvx * nx + rvy * ny;
+              const vn = (c.vx - a.vx) * nx + (c.vy - a.vy) * ny;
               if (vn < 0) {
                 const j = -(1 + PAIR_REST) * vn * 0.5;
                 a.vx -= nx * j;
@@ -181,39 +264,26 @@ export default function MadeWithPool() {
     const draw = () => {
       ctx.clearRect(0, 0, W, H);
       for (const b of bodies) {
+        if (!b.img || !b.img.complete) continue;
         ctx.save();
         ctx.translate(b.x, b.y);
         ctx.rotate(b.angle);
-        const s = b.r * 1.78; // square tile inscribed in the collision circle
-        const half = s / 2;
-        const rad = Math.max(4, s * 0.14);
-        // rounded-square clip
-        ctx.beginPath();
-        ctx.moveTo(-half + rad, -half);
-        ctx.arcTo(half, -half, half, half, rad);
-        ctx.arcTo(half, half, -half, half, rad);
-        ctx.arcTo(-half, half, -half, -half, rad);
-        ctx.arcTo(-half, -half, half, -half, rad);
-        ctx.closePath();
-        if (b.img && b.img.complete) {
-          ctx.save();
-          ctx.clip();
-          // cover-fit the image into the square
-          const iw = b.img.naturalWidth || 1;
-          const ih = b.img.naturalHeight || 1;
-          const scale = Math.max(s / iw, s / ih);
-          const dw = iw * scale;
-          const dh = ih * scale;
-          ctx.drawImage(b.img, -dw / 2, -dh / 2, dw, dh);
-          ctx.restore();
-        } else {
-          ctx.fillStyle = "#26262b";
-          ctx.fill();
-        }
-        // subtle border for depth
-        ctx.lineWidth = 1;
-        ctx.strokeStyle = "rgba(255,255,255,0.10)";
-        ctx.stroke();
+        ctx.shadowColor = "rgba(0,0,0,0.42)";
+        ctx.shadowBlur = 9;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 3;
+        // transparent image, trimmed — no square, no background
+        ctx.drawImage(
+          b.img,
+          b.sx,
+          b.sy,
+          b.sw,
+          b.sh,
+          -b.halfW,
+          -b.halfH,
+          b.halfW * 2,
+          b.halfH * 2
+        );
         ctx.restore();
       }
     };
@@ -221,6 +291,7 @@ export default function MadeWithPool() {
     let raf = 0;
     let running = false;
     const loop = () => {
+      if (!running) return;
       step();
       draw();
       raf = requestAnimationFrame(loop);
@@ -228,8 +299,8 @@ export default function MadeWithPool() {
     const start = () => {
       if (running) return;
       running = true;
-      pointer.px = pointer.x;
-      pointer.py = pointer.y;
+      ptr.px = ptr.x;
+      ptr.py = ptr.y;
       raf = requestAnimationFrame(loop);
     };
     const stop = () => {
@@ -237,23 +308,21 @@ export default function MadeWithPool() {
       cancelAnimationFrame(raf);
     };
 
-    // Pointer handlers (canvas-space)
     const toLocal = (clientX: number, clientY: number) => {
       const rect = canvas.getBoundingClientRect();
-      pointer.x = clientX - rect.left;
-      pointer.y = clientY - rect.top;
+      ptr.x = clientX - rect.left;
+      ptr.y = clientY - rect.top;
     };
     const onMove = (e: PointerEvent) => {
       toLocal(e.clientX, e.clientY);
-      pointer.active = true;
+      ptr.active = true;
     };
     const onLeave = () => {
-      pointer.active = false;
-      pointer.x = -9999;
-      pointer.y = -9999;
+      ptr.active = false;
+      ptr.x = -9999;
+      ptr.y = -9999;
     };
 
-    // Init
     buildBodies();
     resize();
     loadImages();
@@ -263,18 +332,18 @@ export default function MadeWithPool() {
     canvas.addEventListener("pointerleave", onLeave, { passive: true });
     window.addEventListener("resize", resize);
 
-    // Only run while the pool is on screen
-    const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => (entry.isIntersecting ? start() : stop()));
-      },
-      { threshold: 0.05 }
-    );
-    io.observe(wrap);
+    // Run continuously (81 bodies is cheap); pause only when the tab is hidden.
+    const onVisibility = () => {
+      if (document.hidden) stop();
+      else start();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    start();
 
     return () => {
       stop();
-      io.disconnect();
+      document.removeEventListener("visibilitychange", onVisibility);
       canvas.removeEventListener("pointermove", onMove);
       canvas.removeEventListener("pointerdown", onMove);
       canvas.removeEventListener("pointerleave", onLeave);
@@ -289,7 +358,8 @@ export default function MadeWithPool() {
           Made with Pathstitch.
         </h2>
         <p className="lede reveal" style={{ textAlign: "center", margin: "22px auto 0" }}>
-          A pool of real projects cut, stitched, and built by makers. Give it a stir.
+          Every piece here was designed, cut, and stitched by me — all of it made with
+          Pathstitch. Give it a stir.
         </p>
       </div>
       <div

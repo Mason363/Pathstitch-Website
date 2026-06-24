@@ -515,7 +515,7 @@ h2.headline {
   width: 100%;
   max-width: 1280px;
   margin: 40px auto 0;
-  height: 540px;
+  height: 380px;
   /* anti-copy: no selection, no native image dragging, no callout */
   user-select: none;
   -webkit-user-select: none;
@@ -535,7 +535,7 @@ h2.headline {
   pointer-events: auto;
 }
 @media (max-width: 768px) {
-  .pool { height: 420px; margin-top: 26px; }
+  .pool { height: 300px; margin-top: 26px; }
 }
 
 /* Final CTA */
