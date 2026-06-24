@@ -42,8 +42,8 @@ export default function MadeWithPool() {
     // smoothed pointer (mouse + touch), canvas-space pixels
     const ptr = { x: -9999, y: -9999, px: -9999, py: -9999, vx: 0, vy: 0, active: false };
     let stir = 0; // 0..1 — how strongly the cursor is stirring; ramps with motion
-    let frozen = false; // when calm + not stirring, the whole sim halts (zero motion)
-    let calm = 0; // consecutive calm frames
+    let lock = 0; // 0..1 — 0 = free motion, 1 = fully frozen. Eases up gradually.
+    let calm = 0; // consecutive calm frames before the lock starts easing in
 
     const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
@@ -165,7 +165,7 @@ export default function MadeWithPool() {
         b.x = Math.max(0, Math.min(W, b.x));
         if (b.y > H) b.y = H;
       }
-      frozen = false; // re-settle after a layout change
+      lock = 0; // re-settle after a layout change
       calm = 0;
     };
 
@@ -177,9 +177,10 @@ export default function MadeWithPool() {
     // corrects gradually, which keeps stacks calm while they settle.
     const SLOP = 0.6;
     const CORRECT = 0.5;
-    const IDLE_DAMP = 0.8; // strong damping when idle so creep dies and it settles
-    const FREEZE_SPEED2 = 0.25; // every tile slower than 0.5px/frame = calm
-    const FREEZE_AFTER = 16; // calm frames before the whole sim freezes
+    const IDLE_DAMP = 0.85; // damping when idle so creep dies and it settles
+    const FREEZE_SPEED2 = 0.3; // every tile slower than ~0.55px/frame = calm
+    const FREEZE_AFTER = 8; // calm frames before the lock starts easing in
+    const LOCK_RAMP = 0.06; // how fast the lock eases to a full stop (gradual)
 
     const step = () => {
       // smoothed pointer velocity
@@ -203,20 +204,24 @@ export default function MadeWithPool() {
 
       const stirring = ptr.active && stir > 0.01;
 
-      // While calm and not stirred, the whole pool is frozen — nothing moves at
-      // all (true zero jitter). Any stir instantly thaws it.
+      // Any stir instantly thaws the pool.
       if (stirring) {
-        frozen = false;
+        lock = 0;
         calm = 0;
       }
-      if (frozen) return;
+      if (lock >= 1) return; // fully frozen — zero motion
+
+      // `flow` scales all motion. As the lock eases in (after the pool goes
+      // calm) flow glides 1 -> 0, so the pile slows to a gentle stop instead of
+      // snapping still.
+      const flow = 1 - lock;
 
       for (const b of bodies) {
-        b.vy += GRAV;
+        b.vy += GRAV * flow;
         b.vx *= AIR;
         b.vy *= AIR;
-        // When idle, bleed energy quickly so the pool settles and freezes; when
-        // stirring this is skipped, so motion stays free and fluid.
+        // When idle, bleed energy so the pool settles; skipped while stirring so
+        // motion stays free and fluid.
         if (!stirring) {
           b.vx *= IDLE_DAMP;
           b.vy *= IDLE_DAMP;
@@ -252,9 +257,9 @@ export default function MadeWithPool() {
           b.vy = (b.vy / sp) * MAX_SPEED;
         }
 
-        b.x += b.vx;
-        b.y += b.vy;
-        b.angle += b.av;
+        b.x += b.vx * flow;
+        b.y += b.vy * flow;
+        b.angle += b.av * flow;
         b.av *= 0.84; // spin dies quickly — no perpetual spinning
         if (b.av > 0.12) b.av = 0.12;
         else if (b.av < -0.12) b.av = -0.12;
@@ -284,7 +289,7 @@ export default function MadeWithPool() {
               const d = Math.sqrt(d2);
               const nx = dx / d;
               const ny = dy / d;
-              const corr = (Math.max(min - d - SLOP, 0) * CORRECT) / 2;
+              const corr = (Math.max(min - d - SLOP, 0) * CORRECT * flow) / 2;
               a.x -= nx * corr;
               a.y -= ny * corr;
               c.x += nx * corr;
@@ -314,9 +319,20 @@ export default function MadeWithPool() {
         if (v2 > maxV2) maxV2 = v2;
       }
 
-      // Freeze once the whole pool is calm and the cursor isn't stirring.
+      // Once the pool is calm and not stirred, ease the lock in so motion
+      // glides to a stop, then snap the last sliver to a true zero-motion rest.
       if (!stirring && maxV2 < FREEZE_SPEED2) {
-        if (++calm > FREEZE_AFTER) frozen = true;
+        if (++calm > FREEZE_AFTER) {
+          lock += (1 - lock) * LOCK_RAMP;
+          if (lock > 0.985) {
+            lock = 1;
+            for (const b of bodies) {
+              b.vx = 0;
+              b.vy = 0;
+              b.av = 0;
+            }
+          }
+        }
       } else {
         calm = 0;
       }
@@ -353,11 +369,11 @@ export default function MadeWithPool() {
     let running = false;
     const loop = () => {
       if (!running) return;
-      const wasFrozen = frozen;
+      const wasFrozen = lock >= 1;
       step();
-      // Redraw while live, plus the single frame on which we freeze. Once
-      // frozen and unchanged, skip drawing entirely (no work, no flicker).
-      if (!frozen || !wasFrozen) draw();
+      // Redraw while live (including the whole gradual lock ramp), plus the
+      // single frame on which it fully freezes. Once frozen, skip drawing.
+      if (lock < 1 || !wasFrozen) draw();
       raf = requestAnimationFrame(loop);
     };
     const start = () => {
