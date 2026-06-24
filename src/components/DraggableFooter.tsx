@@ -10,6 +10,7 @@ interface Point {
 interface DraggableFooterProps {
   onBackgroundClick: (point: Point) => void;
   onBackgroundMouseMove: (point: Point) => void;
+  floatProgress?: number; // 0..1 scroll progress; lifts & fades the wordmark
 }
 
 interface LetterState {
@@ -22,6 +23,7 @@ interface LetterState {
 export default function DraggableFooter({
   onBackgroundClick,
   onBackgroundMouseMove,
+  floatProgress = 0,
 }: DraggableFooterProps) {
   const [lettersData, setLettersData] = useState<LetterState[]>([]);
   const [letterSpacing, setLetterSpacing] = useState(145);
@@ -44,11 +46,16 @@ export default function DraggableFooter({
       
       let spacing = 145; // Clean spacing between letters
       let fSize = 200;
-      
+
       if (isMobileRatio) {
         // Fit letters inside screen width with a small margin
         spacing = Math.min(145, (w * 0.92) / 10);
         fSize = spacing / 0.725;
+      } else {
+        // Landscape: cap the wordmark by viewport height (and width) so it stays a
+        // bottom banner on short screens instead of swallowing the pitch above it.
+        fSize = Math.min(200, Math.floor(h * 0.18), Math.floor((w * 0.96) / 7.25));
+        spacing = fSize * 0.725;
       }
       
       setLetterSpacing(spacing);
@@ -206,6 +213,11 @@ export default function DraggableFooter({
             WebkitTextStroke: "0.5px rgba(255, 255, 255, 0.15)",
             zIndex: 20,
             touchAction: "none",
+            // Scroll-driven "float up" — letters lift and fade as the hero scrolls away
+            transform: `translateY(${-floatProgress * 240}px)`,
+            opacity: Math.max(0, 1 - floatProgress * 1.15),
+            transition: dragInfo.current ? "none" : "transform 0.05s linear",
+            willChange: "transform, opacity",
           }}
         >
           {item.char}

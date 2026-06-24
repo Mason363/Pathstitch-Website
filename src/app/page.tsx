@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import Header from "@/components/Header";
 import ImageViewer from "@/components/ImageViewer";
 import MeasurementCanvas from "@/components/MeasurementCanvas";
+import LandingSections from "@/components/LandingSections";
 
 interface Point {
   x: number;
@@ -46,8 +47,21 @@ export default function Home() {
   const [radius, setRadius] = useState(0); // Starting fillet radius set to 0 (sharp corners)
   const [imageSize, setImageSize] = useState({ width: 720, height: 480 });
   const [isMobileRatio, setIsMobileRatio] = useState(false);
-  
+  const [isShort, setIsShort] = useState(false); // short landscape viewports need the content raised
+  const [floatProgress, setFloatProgress] = useState(0); // 0..1 over the first viewport of scroll
+
   const glowCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Track scroll within the hero so the giant wordmark "floats up" as you scroll down
+  useEffect(() => {
+    const onScroll = () => {
+      const h = window.innerHeight || 1;
+      setFloatProgress(Math.min(1, Math.max(0, window.scrollY / h)));
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   // Detect and track responsive dimensions
   useEffect(() => {
@@ -56,14 +70,19 @@ export default function Home() {
       const h = window.innerHeight;
       const isMobile = w < h;
       setIsMobileRatio(isMobile);
-      
+      setIsShort(!isMobile && h < 860);
+
       if (isMobile) {
         // Narrow viewport: scale width to fit screen width with 88% margin
         const newWidth = Math.min(720, Math.floor(w * 0.88));
         const newHeight = Math.floor(newWidth * (2 / 3));
         setImageSize({ width: newWidth, height: newHeight });
       } else {
-        setImageSize({ width: 720, height: 480 });
+        // Landscape: keep the 3:2 screenshot, but cap by viewport height so short
+        // laptop screens leave room for the pitch + wordmark below it.
+        const newHeight = Math.max(300, Math.min(480, Math.floor(h * 0.46)));
+        const newWidth = Math.min(Math.floor(w * 0.7), Math.floor(newHeight * 1.5));
+        setImageSize({ width: newWidth, height: Math.floor(newWidth / 1.5) });
       }
     };
     handleResize();
@@ -216,7 +235,8 @@ export default function Home() {
   };
 
   return (
-    <div style={styles.appContainer}>
+    <div className="site">
+    <section className="hero" style={styles.appContainer}>
       {/* Background CAD grid */}
       <div className="cad-grid" />
 
@@ -237,7 +257,10 @@ export default function Home() {
       <Header />
 
       {/* Main Content Layout (Z-index 10, centers image and handles buttons absolutely below) */}
-      <div style={styles.contentLayout}>
+      <div style={{
+        ...styles.contentLayout,
+        top: isShort ? "31%" : "40%",
+      }}>
         <div style={styles.imageWrapper}>
           {/* Centered Image Viewer (Stitches Animation around Single Screenshot) */}
           <ImageViewer 
@@ -248,15 +271,33 @@ export default function Home() {
             dimensions={imageSize}
           />
           
-          {/* Action Panel / Download Buttons (placed absolutely below the image container) */}
+          {/* Pitch + Download Buttons (placed absolutely below the image container) */}
           <div style={{
             ...styles.actionPanel,
-            flexDirection: isMobileRatio ? "column" : "row",
-            gap: isMobileRatio ? "10px" : "16px",
             width: isMobileRatio ? "90vw" : "auto",
-            maxWidth: isMobileRatio ? "320px" : "none",
-            top: isMobileRatio ? "calc(100% + 16px)" : "calc(100% + 24px)",
+            maxWidth: isMobileRatio ? "340px" : "640px",
+            top: isMobileRatio ? "calc(100% + 18px)" : "calc(100% + 30px)",
           }}>
+            <div style={{
+              ...styles.heroTag,
+              fontSize: isMobileRatio ? "10px" : "11px",
+            }}>
+              FREE&nbsp;&nbsp;·&nbsp;&nbsp;OPEN-SOURCE&nbsp;&nbsp;·&nbsp;&nbsp;NATIVE&nbsp;macOS
+            </div>
+            <p style={{
+              ...styles.heroSub,
+              fontSize: isMobileRatio ? "14px" : "17px",
+            }}>
+              The fast, native Mac studio for leather patterns, saddle-stitch holes, and
+              unfolding 3D models into flat, cuttable panels.
+            </p>
+
+            <div style={{
+              ...styles.buttonRow,
+              flexDirection: isMobileRatio ? "column" : "row",
+              gap: isMobileRatio ? "10px" : "16px",
+              width: isMobileRatio ? "100%" : "auto",
+            }}>
             {/* Download Button */}
             <a
               href="https://github.com/Mason363/Pathstitch/releases"
@@ -296,27 +337,37 @@ export default function Home() {
               </svg>
               View on GitHub
             </a>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Draggable Footer full-screen Fabric overlay (Z-index 5) */}
-      <DraggableFooter 
+      <DraggableFooter
         onBackgroundClick={handleBackgroundClick}
         onBackgroundMouseMove={handleBackgroundMouseMove}
+        floatProgress={floatProgress}
       />
+
+      {/* Scroll cue */}
+      <div className="scroll-cue">
+        <span>scroll to explore</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </div>
+    </section>
+
+    {/* Scrollable marketing content */}
+    <LandingSections />
     </div>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
   appContainer: {
-    width: "100vw",
-    height: "100vh",
     display: "flex",
     flexDirection: "column",
-    overflow: "hidden",
-    position: "relative",
     backgroundColor: "var(--bg-workspace)",
   },
   contentLayout: {
@@ -335,12 +386,39 @@ const styles: Record<string, React.CSSProperties> = {
   },
   actionPanel: {
     position: "absolute",
-    top: "calc(100% + 24px)",
+    top: "calc(100% + 30px)",
+    left: "50%",
+    transform: "translateX(-50%)",
     display: "flex",
-    justifyContent: "center",
+    flexDirection: "column",
+    alignItems: "center",
     gap: "16px",
     zIndex: 30,
     pointerEvents: "auto",
+    textAlign: "center",
+  },
+  heroTag: {
+    fontFamily: "var(--font-mono), ui-monospace, monospace",
+    fontSize: "11px",
+    letterSpacing: "0.22em",
+    color: "var(--color-accent-orange)",
+    fontWeight: 700,
+  },
+  heroSub: {
+    margin: 0,
+    maxWidth: "560px",
+    fontSize: "17px",
+    lineHeight: 1.6,
+    color: "var(--text-secondary)",
+    fontFamily: "var(--font-sans), sans-serif",
+    fontWeight: 400,
+    textWrap: "balance",
+  },
+  buttonRow: {
+    display: "flex",
+    justifyContent: "center",
+    gap: "16px",
+    marginTop: "4px",
   },
   primaryButton: {
     backgroundColor: "var(--color-accent-blue)",
