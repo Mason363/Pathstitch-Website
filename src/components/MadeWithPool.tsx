@@ -42,6 +42,8 @@ export default function MadeWithPool() {
     // smoothed pointer (mouse + touch), canvas-space pixels
     const ptr = { x: -9999, y: -9999, px: -9999, py: -9999, vx: 0, vy: 0, active: false };
     let stir = 0; // 0..1 — how strongly the cursor is stirring; ramps with motion
+    let frozen = false; // when calm + not stirring, the whole sim halts (zero motion)
+    let calm = 0; // consecutive calm frames
 
     const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
@@ -163,17 +165,21 @@ export default function MadeWithPool() {
         b.x = Math.max(0, Math.min(W, b.x));
         if (b.y > H) b.y = H;
       }
+      frozen = false; // re-settle after a layout change
+      calm = 0;
     };
 
     // ---- Physics (calm) ----
     const GRAV = 0.15;
     const AIR = 0.985;
-    const BOUND_K = 0.12; // soft containment spring
     const MAX_SPEED = 8;
     // Baumgarte-style collision softening — leaves a tiny stable overlap and
-    // corrects gradually, which kills the settled-pile jitter.
+    // corrects gradually, which keeps stacks calm while they settle.
     const SLOP = 0.6;
     const CORRECT = 0.5;
+    const IDLE_DAMP = 0.8; // strong damping when idle so creep dies and it settles
+    const FREEZE_SPEED2 = 0.25; // every tile slower than 0.5px/frame = calm
+    const FREEZE_AFTER = 16; // calm frames before the whole sim freezes
 
     const step = () => {
       // smoothed pointer velocity
@@ -195,20 +201,35 @@ export default function MadeWithPool() {
       const targetStir = ptr.active ? Math.min(1, speed / 5.5) : 0;
       stir += (targetStir - stir) * (targetStir > stir ? 0.06 : 0.03);
 
-      const stirring = ptr.active && stir > 0.002;
+      const stirring = ptr.active && stir > 0.01;
+
+      // While calm and not stirred, the whole pool is frozen — nothing moves at
+      // all (true zero jitter). Any stir instantly thaws it.
+      if (stirring) {
+        frozen = false;
+        calm = 0;
+      }
+      if (frozen) return;
 
       for (const b of bodies) {
         b.vy += GRAV;
         b.vx *= AIR;
         b.vy *= AIR;
+        // When idle, bleed energy quickly so the pool settles and freezes; when
+        // stirring this is skipped, so motion stays free and fluid.
+        if (!stirring) {
+          b.vx *= IDLE_DAMP;
+          b.vy *= IDLE_DAMP;
+        }
 
         // fluid cursor stir — drags tiles along with the motion, ramped by `stir`
         if (stirring) {
           const dx = b.x - ptr.x;
           const dy = b.y - ptr.y;
           const reach = 135 + b.r;
-          const d = Math.hypot(dx, dy) || 0.0001;
-          if (d < reach) {
+          const d2c = dx * dx + dy * dy;
+          if (d2c < reach * reach) {
+            const d = Math.sqrt(d2c) || 0.0001;
             const nx = dx / d;
             const ny = dy / d;
             const influence = (1 - d / reach) * stir;
@@ -223,27 +244,12 @@ export default function MadeWithPool() {
           }
         }
 
-        // Soft containment. The walls sit a full tile-extent inside the canvas
-        // so the image never reaches the edge to be clipped — clipping, if it
-        // ever happened, would be *beyond* this wall. The bottom is the ground.
-        const ext = Math.hypot(b.halfW, b.halfH);
-        if (b.x < ext) b.vx += (ext - b.x) * BOUND_K;
-        else if (b.x > W - ext) b.vx -= (b.x - (W - ext)) * BOUND_K;
-        if (b.y < ext) b.vy += (ext - b.y) * BOUND_K;
-        if (b.y > H - b.r) b.vy -= (b.y - (H - b.r)) * BOUND_K;
-
         // clamp speed so nothing ever bursts into a frenzy
         const sp2 = b.vx * b.vx + b.vy * b.vy;
         if (sp2 > MAX_SPEED * MAX_SPEED) {
           const sp = Math.sqrt(sp2);
           b.vx = (b.vx / sp) * MAX_SPEED;
           b.vy = (b.vy / sp) * MAX_SPEED;
-        } else if (sp2 < 0.6) {
-          // sleep damping: nearly-resting tiles settle smoothly instead of
-          // shimmering. Fast (stirred/flung) tiles are untouched, so it never
-          // feels sluggish.
-          b.vx *= 0.6;
-          b.vy *= 0.6;
         }
 
         b.x += b.vx;
@@ -252,18 +258,19 @@ export default function MadeWithPool() {
         b.av *= 0.84; // spin dies quickly — no perpetual spinning
         if (b.av > 0.12) b.av = 0.12;
         else if (b.av < -0.12) b.av = -0.12;
-        else if (b.av < 0.0025 && b.av > -0.0025) b.av = 0;
 
-        // hard backstop, also a full extent in, so the image never clips the
-        // sides or top; the bottom may sit on the floor (the ground).
-        if (b.x < ext) b.x = ext;
-        else if (b.x > W - ext) b.x = W - ext;
-        if (b.y < ext) b.y = ext;
-        if (b.y > H) b.y = H;
+        // Firm, inelastic containment. The walls sit a full tile-extent inside
+        // the canvas, so the image never reaches the edge to be clipped — any
+        // clipping would be *beyond* this wall. Stopping the inward velocity (no
+        // bounce) is what lets the pool actually come to rest. Bottom = ground.
+        const ext = Math.hypot(b.halfW, b.halfH);
+        if (b.x < ext) { b.x = ext; if (b.vx < 0) b.vx = 0; }
+        else if (b.x > W - ext) { b.x = W - ext; if (b.vx > 0) b.vx = 0; }
+        if (b.y < ext) { b.y = ext; if (b.vy < 0) b.vy = 0; }
+        if (b.y > H - b.r) { b.y = H - b.r; if (b.vy > 0) b.vy = 0; }
       }
 
-      // collisions: soft positional correction (slop) + inelastic impulse.
-      // More iterations + partial correction = a stable, smooth stack.
+      // collisions: soft slop correction + inelastic impulse
       for (let iter = 0; iter < 4; iter++) {
         for (let i = 0; i < bodies.length; i++) {
           const a = bodies[i];
@@ -277,8 +284,6 @@ export default function MadeWithPool() {
               const d = Math.sqrt(d2);
               const nx = dx / d;
               const ny = dy / d;
-              // only correct the penetration beyond a small slop, and only
-              // partially — this is what removes the jitter
               const corr = (Math.max(min - d - SLOP, 0) * CORRECT) / 2;
               a.x -= nx * corr;
               a.y -= ny * corr;
@@ -286,7 +291,6 @@ export default function MadeWithPool() {
               c.y += ny * corr;
               const vn = (c.vx - a.vx) * nx + (c.vy - a.vy) * ny;
               if (vn < 0) {
-                // fully inelastic along the normal — no bounce, no jitter
                 const j = -vn * 0.5;
                 a.vx -= nx * j;
                 a.vy -= ny * j;
@@ -298,15 +302,23 @@ export default function MadeWithPool() {
         }
       }
 
-      // Final containment pass — collisions can nudge a tile past the wall, so
-      // re-seat the sides and top here. This guarantees the image edge never
-      // crosses the canvas to be clipped (the bottom stays the ground).
+      // Final containment pass — re-seat sides/top/floor so nothing ever clips.
+      let maxV2 = 0;
       for (const b of bodies) {
         const ext = Math.hypot(b.halfW, b.halfH);
-        if (b.x < ext) b.x = ext;
-        else if (b.x > W - ext) b.x = W - ext;
-        if (b.y < ext) b.y = ext;
-        if (b.y > H) b.y = H;
+        if (b.x < ext) { b.x = ext; if (b.vx < 0) b.vx = 0; }
+        else if (b.x > W - ext) { b.x = W - ext; if (b.vx > 0) b.vx = 0; }
+        if (b.y < ext) { b.y = ext; if (b.vy < 0) b.vy = 0; }
+        if (b.y > H - b.r) { b.y = H - b.r; if (b.vy > 0) b.vy = 0; }
+        const v2 = b.vx * b.vx + b.vy * b.vy;
+        if (v2 > maxV2) maxV2 = v2;
+      }
+
+      // Freeze once the whole pool is calm and the cursor isn't stirring.
+      if (!stirring && maxV2 < FREEZE_SPEED2) {
+        if (++calm > FREEZE_AFTER) frozen = true;
+      } else {
+        calm = 0;
       }
     };
 
@@ -341,8 +353,11 @@ export default function MadeWithPool() {
     let running = false;
     const loop = () => {
       if (!running) return;
+      const wasFrozen = frozen;
       step();
-      draw();
+      // Redraw while live, plus the single frame on which we freeze. Once
+      // frozen and unchanged, skip drawing entirely (no work, no flicker).
+      if (!frozen || !wasFrozen) draw();
       raf = requestAnimationFrame(loop);
     };
     const start = () => {
