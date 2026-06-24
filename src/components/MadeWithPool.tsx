@@ -41,6 +41,7 @@ export default function MadeWithPool() {
 
     // smoothed pointer (mouse + touch), canvas-space pixels
     const ptr = { x: -9999, y: -9999, px: -9999, py: -9999, vx: 0, vy: 0, active: false };
+    let stir = 0; // 0..1 — how strongly the cursor is stirring; ramps with motion
 
     const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
@@ -100,7 +101,7 @@ export default function MadeWithPool() {
       const rect = wrap.getBoundingClientRect();
       W = rect.width;
       H = rect.height;
-      const base = Math.max(46, Math.min(72, W / 22));
+      const base = Math.max(56, Math.min(86, W / 18));
       for (let i = 0; i < COUNT; i++) {
         const size = rand(base * 0.82, base * 1.18);
         const b: Body = {
@@ -172,40 +173,61 @@ export default function MadeWithPool() {
     const MAX_SPEED = 8;
 
     const step = () => {
-      // smoothed pointer velocity (kills the "small move = frenzy" feel)
-      const rawvx = ptr.x - ptr.px;
-      const rawvy = ptr.y - ptr.py;
-      ptr.vx = ptr.vx * 0.7 + rawvx * 0.3;
-      ptr.vy = ptr.vy * 0.7 + rawvy * 0.3;
+      // smoothed pointer velocity
+      if (ptr.active) {
+        const rawvx = ptr.x - ptr.px;
+        const rawvy = ptr.y - ptr.py;
+        ptr.vx = ptr.vx * 0.72 + rawvx * 0.28;
+        ptr.vy = ptr.vy * 0.72 + rawvy * 0.28;
+      } else {
+        ptr.vx *= 0.85;
+        ptr.vy *= 0.85;
+      }
       ptr.px = ptr.x;
       ptr.py = ptr.y;
+
+      // The stir only builds while the cursor is moving, and eases in/out — so
+      // a still cursor does nothing and motion feels like flowing through water.
+      const speed = Math.hypot(ptr.vx, ptr.vy);
+      const targetStir = ptr.active ? Math.min(1, speed / 5.5) : 0;
+      stir += (targetStir - stir) * (targetStir > stir ? 0.06 : 0.03);
+
+      const stirring = ptr.active && stir > 0.002;
 
       for (const b of bodies) {
         b.vy += GRAV;
         b.vx *= AIR;
         b.vy *= AIR;
 
-        // gentle cursor interaction
-        if (ptr.active) {
+        // fluid cursor stir — drags tiles along with the motion, ramped by `stir`
+        if (stirring) {
           const dx = b.x - ptr.x;
           const dy = b.y - ptr.y;
-          const reach = 100 + b.r;
+          const reach = 135 + b.r;
           const d = Math.hypot(dx, dy) || 0.0001;
           if (d < reach) {
             const nx = dx / d;
             const ny = dy / d;
-            const f = (1 - d / reach) * 1.4;
-            b.vx += nx * f + ptr.vx * 0.05;
-            b.vy += ny * f + ptr.vy * 0.05;
-            b.av += (ptr.vx * ny - ptr.vy * nx) * 0.0004;
+            const influence = (1 - d / reach) * stir;
+            // carry the tile along with the cursor (the "current")
+            b.vx += ptr.vx * 0.22 * influence;
+            b.vy += ptr.vy * 0.22 * influence;
+            // gentle parting so the cursor opens a path through the pool
+            b.vx += nx * 0.85 * influence;
+            b.vy += ny * 0.85 * influence;
+            // a touch of swirl
+            b.av += (ptr.vx * ny - ptr.vy * nx) * 0.0005 * influence;
           }
         }
 
-        // soft containment — an invisible "force" instead of hard walls
-        if (b.x < b.r) b.vx += (b.r - b.x) * BOUND_K;
-        else if (b.x > W - b.r) b.vx -= (b.x - (W - b.r)) * BOUND_K;
-        if (b.y < b.r) b.vy += (b.r - b.y) * BOUND_K;
-        else if (b.y > H - b.r) b.vy -= (b.y - (H - b.r)) * BOUND_K;
+        // Soft containment. The walls sit a full tile-extent inside the canvas
+        // so the image never reaches the edge to be clipped — clipping, if it
+        // ever happened, would be *beyond* this wall. The bottom is the ground.
+        const ext = Math.hypot(b.halfW, b.halfH);
+        if (b.x < ext) b.vx += (ext - b.x) * BOUND_K;
+        else if (b.x > W - ext) b.vx -= (b.x - (W - ext)) * BOUND_K;
+        if (b.y < ext) b.vy += (ext - b.y) * BOUND_K;
+        if (b.y > H - b.r) b.vy -= (b.y - (H - b.r)) * BOUND_K;
 
         // clamp speed so nothing ever bursts into a frenzy
         const sp = Math.hypot(b.vx, b.vy);
@@ -221,11 +243,12 @@ export default function MadeWithPool() {
         if (b.av > 0.12) b.av = 0.12;
         else if (b.av < -0.12) b.av = -0.12;
 
-        // hard backstop so a tile can never fully leave the pool
-        if (b.x < 0) b.x = 0;
-        else if (b.x > W) b.x = W;
-        if (b.y < 0) b.y = 0;
-        else if (b.y > H) b.y = H;
+        // hard backstop, also a full extent in, so the image never clips the
+        // sides or top; the bottom may sit on the floor (the ground).
+        if (b.x < ext) b.x = ext;
+        else if (b.x > W - ext) b.x = W - ext;
+        if (b.y < ext) b.y = ext;
+        if (b.y > H) b.y = H;
       }
 
       // collisions: positional correction + light impulse
@@ -258,6 +281,17 @@ export default function MadeWithPool() {
             }
           }
         }
+      }
+
+      // Final containment pass — collisions can nudge a tile past the wall, so
+      // re-seat the sides and top here. This guarantees the image edge never
+      // crosses the canvas to be clipped (the bottom stays the ground).
+      for (const b of bodies) {
+        const ext = Math.hypot(b.halfW, b.halfH);
+        if (b.x < ext) b.x = ext;
+        else if (b.x > W - ext) b.x = W - ext;
+        if (b.y < ext) b.y = ext;
+        if (b.y > H) b.y = H;
       }
     };
 
@@ -308,13 +342,19 @@ export default function MadeWithPool() {
       cancelAnimationFrame(raf);
     };
 
-    const toLocal = (clientX: number, clientY: number) => {
-      const rect = canvas.getBoundingClientRect();
-      ptr.x = clientX - rect.left;
-      ptr.y = clientY - rect.top;
-    };
     const onMove = (e: PointerEvent) => {
-      toLocal(e.clientX, e.clientY);
+      const rect = canvas.getBoundingClientRect();
+      const nx = e.clientX - rect.left;
+      const ny = e.clientY - rect.top;
+      // re-entering after leaving: reset history so we don't register a velocity spike
+      if (!ptr.active) {
+        ptr.px = nx;
+        ptr.py = ny;
+        ptr.vx = 0;
+        ptr.vy = 0;
+      }
+      ptr.x = nx;
+      ptr.y = ny;
       ptr.active = true;
     };
     const onLeave = () => {
