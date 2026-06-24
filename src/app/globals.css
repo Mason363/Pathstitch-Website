@@ -535,7 +535,7 @@ h2.headline {
   pointer-events: auto;
 }
 @media (max-width: 768px) {
-  .pool { height: 360px; margin-top: 26px; }
+  .pool { height: 460px; margin-top: 26px; }
 }
 
 /* Final CTA */

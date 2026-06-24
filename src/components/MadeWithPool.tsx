@@ -103,7 +103,10 @@ export default function MadeWithPool() {
       const rect = wrap.getBoundingClientRect();
       W = rect.width;
       H = rect.height;
-      const base = Math.max(62, Math.min(96, W / 16));
+      // Scale tile size with sqrt(width) so the *pile height* stays roughly
+      // constant across screens — desktop stays ~the same, while narrow phones
+      // get proportionally smaller tiles that fit instead of overflowing.
+      const base = Math.max(34, Math.min(96, Math.sqrt(W) * 2.15));
       for (let i = 0; i < COUNT; i++) {
         const size = rand(base * 0.82, base * 1.18);
         const b: Body = {
