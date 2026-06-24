@@ -504,6 +504,40 @@ h2.headline {
   line-height: 1.5;
 }
 
+/* Made-with-Pathstitch physics pool */
+.pool-section {
+  border-top: 1px solid var(--border-soft);
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+.pool {
+  position: relative;
+  width: 100%;
+  max-width: 1280px;
+  margin: 40px auto 0;
+  height: 540px;
+  /* anti-copy: no selection, no native image dragging, no callout */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  touch-action: pan-y;
+  -webkit-tap-highlight-color: transparent;
+  cursor: grab;
+}
+.pool:active { cursor: grabbing; }
+.pool-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  -webkit-user-drag: none;
+  user-select: none;
+  pointer-events: auto;
+}
+@media (max-width: 768px) {
+  .pool { height: 420px; margin-top: 26px; }
+}
+
 /* Final CTA */
 .final {
   position: relative;

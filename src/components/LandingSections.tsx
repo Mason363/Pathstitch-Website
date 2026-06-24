@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import MadeWithPool from "./MadeWithPool";
 
 const RELEASES = "https://github.com/Mason363/Pathstitch/releases/latest";
 const REPO = "https://github.com/Mason363/Pathstitch";
@@ -397,6 +398,9 @@ export default function LandingSections() {
         </div>
       </section>
 
+      {/* ---------- Made-with-Pathstitch physics pool ---------- */}
+      <MadeWithPool />
+
       {/* ---------- Final CTA ---------- */}
       <section className="final">
         <h2 className="reveal">Pathstitch is for makers who&apos;d rather be making.</h2>
@@ -454,7 +458,7 @@ export default function LandingSections() {
           </div>
         </div>
         <div className="footer-base">
-          <span>Built with care by Mason Chen.</span>
+          <span>Built with ❤️ by Mason Chen.</span>
           <span>
             Licensed under{" "}
             <a href={`${REPO}/blob/main/LICENSE`} target="_blank" rel="noopener noreferrer">GPLv3</a>.
