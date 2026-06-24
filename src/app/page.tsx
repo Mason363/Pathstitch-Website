@@ -47,7 +47,6 @@ export default function Home() {
   const [radius, setRadius] = useState(0); // Starting fillet radius set to 0 (sharp corners)
   const [imageSize, setImageSize] = useState({ width: 720, height: 480 });
   const [isMobileRatio, setIsMobileRatio] = useState(false);
-  const [isShort, setIsShort] = useState(false); // short landscape viewports need the content raised
   const [floatProgress, setFloatProgress] = useState(0); // 0..1 over the first viewport of scroll
 
   const glowCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -70,7 +69,6 @@ export default function Home() {
       const h = window.innerHeight;
       const isMobile = w < h;
       setIsMobileRatio(isMobile);
-      setIsShort(!isMobile && h < 860);
 
       if (isMobile) {
         // Narrow viewport: scale width to fit screen width with 88% margin
@@ -259,7 +257,7 @@ export default function Home() {
       {/* Main Content Layout (Z-index 10, centers image and handles buttons absolutely below) */}
       <div style={{
         ...styles.contentLayout,
-        top: isShort ? "31%" : "40%",
+        top: "42%",
       }}>
         <div style={styles.imageWrapper}>
           {/* Centered Image Viewer (Stitches Animation around Single Screenshot) */}
@@ -271,27 +269,13 @@ export default function Home() {
             dimensions={imageSize}
           />
           
-          {/* Pitch + Download Buttons (placed absolutely below the image container) */}
+          {/* Download Buttons (placed absolutely below the image container) */}
           <div style={{
             ...styles.actionPanel,
             width: isMobileRatio ? "90vw" : "auto",
             maxWidth: isMobileRatio ? "340px" : "640px",
-            top: isMobileRatio ? "calc(100% + 18px)" : "calc(100% + 30px)",
+            top: isMobileRatio ? "calc(100% + 22px)" : "calc(100% + 34px)",
           }}>
-            <div style={{
-              ...styles.heroTag,
-              fontSize: isMobileRatio ? "10px" : "11px",
-            }}>
-              FREE&nbsp;&nbsp;·&nbsp;&nbsp;OPEN-SOURCE&nbsp;&nbsp;·&nbsp;&nbsp;NATIVE&nbsp;macOS
-            </div>
-            <p style={{
-              ...styles.heroSub,
-              fontSize: isMobileRatio ? "14px" : "17px",
-            }}>
-              The fast, native Mac studio for leather patterns, saddle-stitch holes, and
-              unfolding 3D models into flat, cuttable panels.
-            </p>
-
             <div style={{
               ...styles.buttonRow,
               flexDirection: isMobileRatio ? "column" : "row",
@@ -348,14 +332,6 @@ export default function Home() {
         onBackgroundMouseMove={handleBackgroundMouseMove}
         floatProgress={floatProgress}
       />
-
-      {/* Scroll cue */}
-      <div className="scroll-cue">
-        <span>scroll to explore</span>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </div>
     </section>
 
     {/* Scrollable marketing content */}
@@ -396,23 +372,6 @@ const styles: Record<string, React.CSSProperties> = {
     zIndex: 30,
     pointerEvents: "auto",
     textAlign: "center",
-  },
-  heroTag: {
-    fontFamily: "var(--font-mono), ui-monospace, monospace",
-    fontSize: "11px",
-    letterSpacing: "0.22em",
-    color: "var(--color-accent-orange)",
-    fontWeight: 700,
-  },
-  heroSub: {
-    margin: 0,
-    maxWidth: "560px",
-    fontSize: "17px",
-    lineHeight: 1.6,
-    color: "var(--text-secondary)",
-    fontFamily: "var(--font-sans), sans-serif",
-    fontWeight: 400,
-    textWrap: "balance",
   },
   buttonRow: {
     display: "flex",

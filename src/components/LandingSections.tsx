@@ -266,6 +266,20 @@ export default function LandingSections() {
     <>
       <StickyNav />
 
+      {/* ---------- Statement ---------- */}
+      <section className="statement">
+        <div className="section">
+          <p className="statement-text reveal">
+            A fast, native Mac studio for <strong>leather patterns</strong>,{" "}
+            <strong>saddle-stitch holes</strong>, and <strong>unfolding 3D models</strong>{" "}
+            into flat, cuttable panels.
+          </p>
+          <div className="statement-tag reveal d1">
+            Free&nbsp;&nbsp;·&nbsp;&nbsp;Open-source&nbsp;&nbsp;·&nbsp;&nbsp;Native&nbsp;macOS
+          </div>
+        </div>
+      </section>
+
       {/* ---------- Origin story ---------- */}
       <section className="story">
         <div className="section">
